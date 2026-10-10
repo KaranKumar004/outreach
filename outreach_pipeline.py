@@ -2116,14 +2116,22 @@ def get_daily_sent_count(log_filepath=OUTREACH_LOG_CSV, target_date=None):
     return count
 
 def load_circuit_breaker_state(state_file=CIRCUIT_BREAKER_STATE_FILE):
-    """Load persistent circuit breaker state from JSON file."""
+    """
+    Load persistent circuit breaker state from JSON file.
+    Returns (state_dict, is_valid).
+    If missing or corrupt, returns ({}, False).
+    """
     if not state_file or not os.path.exists(state_file):
-        return {}
+        return {}, False
     try:
         with open(state_file, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+            data = json.load(f)
+            if isinstance(data, dict):
+                return data, True
+            return {}, False
+    except Exception as e:
+        print(f"[!] Warning: Circuit breaker state file '{state_file}' is corrupt or unreadable: {e}")
+        return {}, False
 
 def save_circuit_breaker_state(state_data, state_file=CIRCUIT_BREAKER_STATE_FILE):
     """Save persistent circuit breaker state atomically."""
@@ -2153,7 +2161,7 @@ def reset_circuit_breaker(reason, state_file=CIRCUIT_BREAKER_STATE_FILE, reset_l
 
     now_iso = get_ist_now().isoformat()
     user = os.environ.get("USERNAME") or os.environ.get("USER") or "unknown"
-    prev_state = load_circuit_breaker_state(state_file)
+    prev_state, _ = load_circuit_breaker_state(state_file)
     prev_reason = prev_state.get("reason", "unknown")
 
     log_line = f"[{now_iso}] USER: {user} | ACTION: RESET | REASON: {reason.strip()} | PRIOR_TRIP: {prev_reason}\n"
@@ -2183,15 +2191,16 @@ def check_circuit_breaker(log_filepath=OUTREACH_LOG_CSV, state_file=None, window
     - Window rolloff is removed: adding more sends cannot rolloff or hide earlier bounces.
     - Tripped if unique initial bounces >= 3 OR (total initial prospects >= 20 and bounce rate > 5%).
     - Once tripped, the breaker stays tripped until manually reset via --reset-breaker --reason "<text>".
+    - If state_file is missing or corrupt, recomputes directly from outreach_log.csv and never defaults to healthy.
     """
     if state_file is None and log_filepath == OUTREACH_LOG_CSV:
         state_file = CIRCUIT_BREAKER_STATE_FILE
 
     if state_file:
-        state = load_circuit_breaker_state(state_file)
-        if state.get("is_tripped", False):
+        state, is_valid = load_circuit_breaker_state(state_file)
+        if is_valid and state.get("is_tripped", False):
             return True, state.get("rate", 0.0), state.get("bounces", 0), state.get("denominator", 0), state.get("reason", "Circuit breaker is tripped and locked. Requires manual reset: --reset-breaker --reason '<text>'")
-        reset_at = state.get("reset_at") if state.get("is_reset", False) else None
+        reset_at = state.get("reset_at") if (is_valid and state.get("is_reset", False)) else None
     else:
         reset_at = None
 
@@ -2907,7 +2916,7 @@ def get_eligible_leads(leads, followup_mode=False, allowed_cities=None, log_file
 
     return eligible_leads
 
-def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=False, warmup=True, segment_filter=None, override_reason="", leads_filepath=None, log_filepath=None, skip_location_audit=False, override_circuit_breaker=False, enabled_files=None):
+def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=False, warmup=True, segment_filter=None, override_reason="", leads_filepath=None, log_filepath=None, skip_location_audit=False, override_circuit_breaker=False, enabled_files=None, state_file=None):
     """Main outreach execution loop with dry-run default, location audit, segment audit, and review flagging."""
     if enabled_files is None:
         enabled_files = ENABLED_LEAD_FILES
@@ -2966,7 +2975,7 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
         return
 
     # Check circuit breaker
-    is_tripped, rate, bounce_cnt, sent_cnt, cb_reason = check_circuit_breaker(log_filepath=log_filepath, enabled_files=enabled_files)
+    is_tripped, rate, bounce_cnt, sent_cnt, cb_reason = check_circuit_breaker(log_filepath=log_filepath, state_file=state_file, enabled_files=enabled_files)
     if is_tripped:
         actual_reason = override_reason or ("Operator override via flag" if override_circuit_breaker else "")
         if actual_reason:
@@ -3031,8 +3040,8 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
 
     # Filter eligible leads
     allowed_cities = [] if skip_location_audit else get_allowed_cities()
-    new_eligible_leads = get_eligible_leads(leads, followup_mode=False, allowed_cities=allowed_cities, segment_filter=segment_filter)
-    eligible_leads = get_eligible_leads(leads, followup_mode=followup_mode, allowed_cities=allowed_cities, segment_filter=segment_filter) if followup_mode else new_eligible_leads
+    new_eligible_leads = get_eligible_leads(leads, followup_mode=False, allowed_cities=allowed_cities, log_filepath=log_filepath, segment_filter=segment_filter)
+    eligible_leads = get_eligible_leads(leads, followup_mode=followup_mode, allowed_cities=allowed_cities, log_filepath=log_filepath, segment_filter=segment_filter) if followup_mode else new_eligible_leads
 
     # Print real emailable lead count per segment and in total
     emailable_counts = Counter(l.get("segment", "unknown") for l in new_eligible_leads)
@@ -3178,7 +3187,14 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
             except Exception as e:
                 err_str = str(e)
                 print(f"    [SEND ERROR] {err_str}")
-                is_auth_error = any(k in err_str.lower() for k in ["534", "535", "webloginrequired", "invalid credentials", "authentication failed"])
+                is_auth_error = (
+                    isinstance(e, smtplib.SMTPAuthenticationError)
+                    or getattr(e, "smtp_code", None) in [534, 535]
+                    or any(k in err_str.lower() for k in [
+                        "534", "535", "webloginrequired", "invalid credentials",
+                        "authentication failed", "login challenge", "username and password not accepted"
+                    ])
+                )
                 is_bounce = (not is_auth_error) and (bool(re.search(r"\b550\b", err_str)) or "recipient rejected" in err_str.lower())
                 status_val = "bounced" if is_bounce else "failed"
 
@@ -3201,10 +3217,10 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
                 }, filepath=log_filepath)
 
                 if is_auth_error:
-                    print(f"\n[!] SMTP Authentication / Login Challenge detected ({err_str}). Aborting batch.")
+                    print(f"\n[CRITICAL AUTH FAILURE] SMTP Authentication / Login Challenge detected ({err_str}). Aborting entire outreach run immediately.")
                     break
 
-                tripped, _, _, _, reason = check_circuit_breaker(log_filepath=log_filepath, enabled_files=enabled_files)
+                tripped, _, _, _, reason = check_circuit_breaker(log_filepath=log_filepath, state_file=state_file, enabled_files=enabled_files)
                 if tripped:
                     print(f"\n[!] Circuit breaker triggered after bounce ({reason}). Aborting batch.")
                     break
@@ -3351,7 +3367,18 @@ def classify_inbound_message(subject, body, from_addr, headers=None):
     if any(s in from_lower for s in bounce_senders) or any(p in subj_lower for p in bounce_subj_patterns):
         diag = extract_ndr_diagnostic(body)
         cause = classify_bounce_cause(diag, body)
-        return "bounce_notice", f"[{cause}] {diag}"
+        is_delay = (
+            any(k in subj_lower for k in ["delay", "delayed", "warning: message delivery delayed"])
+            or any(k in body_lower for k in [
+                "delivery delay", "transient failure", "will keep trying", "trying for",
+                "delayed", "temporary problem", "action: delayed", "delivery is delayed"
+            ])
+            or "delay" in diag.lower()
+        )
+        if is_delay:
+            return "delivery_delay", f"[{cause}] {diag} (transient delay; flag for recheck after 72h)"
+        else:
+            return "bounce_permanent", f"[{cause}] {diag}"
 
     # 2. Auto-reply / Out of office
     auto_subj_patterns = [
@@ -3622,11 +3649,14 @@ def sync_inbox(log_filepath=OUTREACH_LOG_CSV, max_messages=50, imap_conn=None, l
                         mark_lead_state(matched_email, "unsubscribed", reason=cat_reason, log_filepath=log_filepath, lead_files=lead_files)
                     results["unsubscribes"] += 1
                     action_taken = "Suppressed (unsubscribed across all lead lists)" if not dry_run else "[DRY-RUN] Would suppress (unsubscribe across all lead lists)"
-                elif category == "bounce_notice":
+                elif category in ["bounce_notice", "bounce_permanent"]:
                     if not dry_run:
                         mark_lead_state(matched_email, "bounced", reason=cat_reason, log_filepath=log_filepath, lead_files=lead_files)
                     results["bounces"] += 1
                     action_taken = "Marked bounced (follow-ups cancelled)" if not dry_run else "[DRY-RUN] Would mark bounced (cancel follow-ups)"
+                elif category == "delivery_delay":
+                    results["delivery_delays"] = results.get("delivery_delays", 0) + 1
+                    action_taken = "Delivery delay (transient warning; no suppression; flag for recheck after 72h)"
                 elif category == "auto_reply":
                     results["auto_replies"] += 1
                     action_taken = "Ignored (auto-responder / OOO - not a genuine reply)"
@@ -3637,6 +3667,13 @@ def sync_inbox(log_filepath=OUTREACH_LOG_CSV, max_messages=50, imap_conn=None, l
                     action_taken = f"Marked replied ({category}) - manual review needed" if not dry_run else f"[DRY-RUN] Would mark replied ({category}) - manual review needed"
 
                 if not dry_run:
+                    status_val = (
+                        "unsubscribed" if category == "unsubscribe"
+                        else ("bounced" if category in ["bounce_notice", "bounce_permanent"]
+                        else ("delivery_delay" if category == "delivery_delay"
+                        else ("auto_reply" if category == "auto_reply"
+                        else "replied")))
+                    )
                     append_outreach_log({
                         "timestamp": get_ist_now().isoformat(),
                         "recipient_email": matched_email,
@@ -3644,7 +3681,7 @@ def sync_inbox(log_filepath=OUTREACH_LOG_CSV, max_messages=50, imap_conn=None, l
                         "segment": (matched_lead.get("segment") if matched_lead else "") or (contacted_emails.get(matched_email, {}).get("segment", "")),
                         "email_type": f"inbox_sync:{category}",
                         "subject": subject[:80],
-                        "status": "unsubscribed" if category == "unsubscribe" else ("bounced" if category == "bounce_notice" else ("auto_reply" if category == "auto_reply" else "replied")),
+                        "status": status_val,
                         "error_message": cat_reason,
                         "message_id": msg_id,
                         "original_subject": subject[:80],
@@ -3687,64 +3724,162 @@ def sync_inbox(log_filepath=OUTREACH_LOG_CSV, max_messages=50, imap_conn=None, l
 
     return results
 
-def generate_report():
-    audit_leads_location()
-    audit_leads_domain_match()
-    leads = load_leads()
-    today = get_ist_now().date()
+def generate_report(log_filepath=OUTREACH_LOG_CSV, lead_files=None):
+    """
+    Generate outreach performance report based strictly on UNIQUE PROSPECTS (never row counts).
+    Reports counts and rates by status (sent, bounced, followed up, replied, suppressed)
+    per source file and globally across all sources, with exact denominators.
+    """
+    if lead_files is None:
+        lead_files = [LEADS_CSV, "leads_abroad_agencies.csv", "leads_austin.csv"]
+    # Filter to existing files
+    active_files = [f for f in lead_files if os.path.exists(f)]
 
-    print("\n" + "=" * 70)
-    print("BENGALURU OUTREACH PIPELINE — STATUS & PERFORMANCE REPORT")
-    print("=" * 70)
+    entries = load_outreach_log(log_filepath)
+
+    # 1. Map log activity by unique prospect email
+    log_initial_sent = set()
+    log_followup_sent = set()
+    log_bounced = set()
+    log_replied = set()
+    log_unsubscribed = set()
+
+    for e in entries:
+        em = normalize_email(e.get("recipient_email", ""))
+        if not em:
+            continue
+        etype = (e.get("email_type") or "").lower()
+        st = (e.get("status") or "").lower()
+
+        if etype == "initial" and st in ["sent", "contacted_1", "bounced"]:
+            log_initial_sent.add(em)
+        elif etype == "followup" and st in ["sent", "contacted_2"]:
+            log_followup_sent.add(em)
+
+        if st == "bounced":
+            log_bounced.add(em)
+        elif st in ["replied", "interested", "wants_info", "pricing", "wrong_contact"]:
+            log_replied.add(em)
+        elif st == "unsubscribed":
+            log_unsubscribed.add(em)
+
+    today = get_ist_now().date()
+    print("\n" + "=" * 78)
+    print("📊 SHEETBOLT OUTREACH REPORT (UNIQUE PROSPECTS BREAKDOWN)")
+    print("=" * 78)
 
     window_ok, window_reason = is_in_sending_window()
-    print(f"Sending Window: {'[OPEN]' if window_ok else '[CLOSED]'} ({window_reason})")
+    print(f"Sending Window:  {'[OPEN]' if window_ok else '[CLOSED]'} ({window_reason})")
+    cap, week, desc = get_warmup_cap(log_filepath=log_filepath, target_date=today)
+    today_sent = get_daily_sent_count(log_filepath=log_filepath, target_date=today)
+    print(f"Daily Volume:    {today_sent}/{cap} emails sent today ({desc})")
+    print(f"Daily Cap Guard: {HARD_DAILY_CAP_LIMIT}/day max ceiling")
 
-    cap, week, desc = get_warmup_cap(target_date=today)
-    today_sent = get_daily_sent_count(target_date=today)
-    print(f"Daily Volume:   {today_sent}/{cap} emails sent today ({desc})")
-    print(f"Daily Cap Guard: {HARD_DAILY_CAP_LIMIT}/day max (hard ceiling enforced; cannot rise without code change)")
-
-    tripped, rate, bounce_cnt, sent_cnt, reason = check_circuit_breaker()
+    tripped, rate, bounce_cnt, sent_cnt, reason = check_circuit_breaker(log_filepath=log_filepath)
     cb_status = "[TRIGGERED - BLOCKED]" if tripped else "[HEALTHY]"
-    print(f"Bounce Rate:    {bounce_cnt}/{sent_cnt} sends - Circuit Breaker: {cb_status} ({reason})")
-    print("-" * 70)
+    print(f"Circuit Breaker: {cb_status} ({bounce_cnt}/{sent_cnt} bounces, rate {rate:.1%})")
+    print("-" * 78)
 
-    all_statuses = ["new", "review_flagged", "unclassified_hold", "contacted_1", "contacted_2", "replied", "unsubscribed", "bounced", "rejected_location"]
+    report_data = {
+        "files": {},
+        "global": {}
+    }
 
-    all_segments = SEGMENTS + ["unclassified"]
-    segment_stats = {s: {st: 0 for st in all_statuses} for s in all_segments}
-    for s in segment_stats:
-        segment_stats[s]["total"] = 0
+    global_prospects = set()
+    global_initial_sent = set()
+    global_bounced = set()
+    global_followup = set()
+    global_replied = set()
+    global_suppressed = set()
 
-    status_totals = {st: 0 for st in all_statuses}
+    print("\n--- BREAKDOWN BY SOURCE FILE (UNIQUE PROSPECTS) ---")
+    for fpath in active_files:
+        leads = load_leads(fpath)
+        file_prospects = {normalize_email(l.get("email", "")) for l in leads if l.get("email")}
+        total_p = len(file_prospects)
+        if total_p == 0:
+            continue
 
-    for l in leads:
-        seg = l.get("segment", "unclassified")
-        if seg not in segment_stats:
-            segment_stats[seg] = {st: 0 for st in all_statuses}
-            segment_stats[seg]["total"] = 0
-        st = l.get("status", "new")
-        if st not in status_totals:
-            status_totals[st] = 0
-        status_totals[st] += 1
-        segment_stats[seg]["total"] += 1
-        if st in segment_stats[seg]:
-            segment_stats[seg][st] += 1
+        file_bounced_leads = {normalize_email(l.get("email", "")) for l in leads if l.get("status") == "bounced"}
+        file_unsub_leads = {normalize_email(l.get("email", "")) for l in leads if l.get("status") == "unsubscribed"}
+        file_replied_leads = {normalize_email(l.get("email", "")) for l in leads if l.get("status") == "replied"}
 
-    print(f"{'Segment':<14} | {'Total':<5} | {'New':<5} | {'Flagged':<7} | {'Sent#1':<6} | {'Sent#2':<6} | {'Replied':<7} | {'OptOut':<6} | {'RejLoc':<6}")
-    print("-" * 70)
+        sent_p = file_prospects.intersection(log_initial_sent)
+        bounced_p = file_prospects.intersection(log_bounced.union(file_bounced_leads))
+        fu_p = file_prospects.intersection(log_followup_sent)
+        replied_p = file_prospects.intersection(log_replied.union(file_replied_leads))
+        suppressed_p = file_prospects.intersection(log_unsubscribed.union(file_unsub_leads).union(bounced_p))
 
-    for seg in all_segments:
-        s = segment_stats.get(seg, {"total": 0, "new": 0, "review_flagged": 0, "contacted_1": 0, "contacted_2": 0, "replied": 0, "unsubscribed": 0, "rejected_location": 0})
-        if s["total"] > 0 or seg in SEGMENTS:
-            print(f"{seg:<14} | {s['total']:<5} | {s['new']:<5} | {s.get('review_flagged', 0):<7} | {s['contacted_1']:<6} | {s['contacted_2']:<6} | {s['replied']:<7} | {s['unsubscribed']:<6} | {s.get('rejected_location', 0):<6}")
+        s_count = len(sent_p)
+        b_count = len(bounced_p)
+        fu_count = len(fu_p)
+        r_count = len(replied_p)
+        sup_count = len(suppressed_p)
 
-    print("=" * 70)
-    print("STATUS SUMMARY:")
-    for st, cnt in status_totals.items():
-        print(f"  - {st:<18}: {cnt}")
-    print(f"Total Leads Recorded: {len(leads)}\n")
+        global_prospects.update(file_prospects)
+        global_initial_sent.update(sent_p)
+        global_bounced.update(bounced_p)
+        global_followup.update(fu_p)
+        global_replied.update(replied_p)
+        global_suppressed.update(suppressed_p)
+
+        sent_rate = (s_count / total_p * 100) if total_p else 0
+        bounce_rate = (b_count / s_count * 100) if s_count else 0
+        fu_rate = (fu_count / s_count * 100) if s_count else 0
+        reply_rate = (r_count / s_count * 100) if s_count else 0
+        sup_rate = (sup_count / total_p * 100) if total_p else 0
+
+        fname = os.path.basename(fpath)
+        print(f"\n📁 File: {fname} ({total_p} unique prospects)")
+        print(f"   • Initial Sent:  {s_count:>3} / {total_p:<3} ({sent_rate:>5.1f}%)")
+        print(f"   • Bounced:       {b_count:>3} / {s_count:<3} ({bounce_rate:>5.1f}% of sent) [{b_count}/{total_p} total]")
+        print(f"   • Followed Up:   {fu_count:>3} / {s_count:<3} ({fu_rate:>5.1f}% of sent)")
+        print(f"   • Replied:       {r_count:>3} / {s_count:<3} ({reply_rate:>5.1f}% of sent)")
+        print(f"   • Suppressed:    {sup_count:>3} / {total_p:<3} ({sup_rate:>5.1f}% of pool)")
+
+        report_data["files"][fname] = {
+            "total_prospects": total_p,
+            "initial_sent": s_count,
+            "bounced": b_count,
+            "followed_up": fu_count,
+            "replied": r_count,
+            "suppressed": sup_count,
+        }
+
+    # Global summary
+    tot_global = len(global_prospects)
+    g_sent = len(global_initial_sent)
+    g_bounce = len(global_bounced)
+    g_fu = len(global_followup)
+    g_reply = len(global_replied)
+    g_sup = len(global_suppressed)
+
+    g_sent_rate = (g_sent / tot_global * 100) if tot_global else 0
+    g_bounce_rate = (g_bounce / g_sent * 100) if g_sent else 0
+    g_fu_rate = (g_fu / g_sent * 100) if g_sent else 0
+    g_reply_rate = (g_reply / g_sent * 100) if g_sent else 0
+    g_sup_rate = (g_sup / tot_global * 100) if tot_global else 0
+
+    print("\n" + "=" * 78)
+    print(f"🌐 GLOBAL UNIQUE PROSPECT RECONCILIATION ({tot_global} total prospects across sources)")
+    print("=" * 78)
+    print(f"  • Unique Prospects Contacted (Initial): {g_sent:>3} / {tot_global:<3} ({g_sent_rate:>5.1f}%)")
+    print(f"  • Unique Prospects Bounced:              {g_bounce:>3} / {g_sent:<3} ({g_bounce_rate:>5.1f}% of sent) [{g_bounce}/{tot_global} total]")
+    print(f"  • Unique Prospects Followed Up:          {g_fu:>3} / {g_sent:<3} ({g_fu_rate:>5.1f}% of sent)")
+    print(f"  • Unique Prospects Replied:              {g_reply:>3} / {g_sent:<3} ({g_reply_rate:>5.1f}% of sent)")
+    print(f"  • Unique Prospects Suppressed:           {g_sup:>3} / {tot_global:<3} ({g_sup_rate:>5.1f}% of pool)")
+    print("=" * 78 + "\n")
+
+    report_data["global"] = {
+        "total_prospects": tot_global,
+        "initial_sent": g_sent,
+        "bounced": g_bounce,
+        "followed_up": g_fu,
+        "replied": g_reply,
+        "suppressed": g_sup,
+    }
+
+    return report_data
 
 def run_preview_only():
     """Renders and displays a clean preview for all 7 business segments without sending any emails."""
@@ -3895,8 +4030,8 @@ def main():
         run_preview_only()
         return
 
-    if args.report:
-        generate_report()
+    if args.report or args.command == "report":
+        generate_report(log_filepath=OUTREACH_LOG_CSV)
         return
 
     if args.audit_locations:

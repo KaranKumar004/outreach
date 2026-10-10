@@ -1463,7 +1463,7 @@ class TestPhase3InboxSyncAndClassification:
 
         # 2. Bounce notices
         c4, _ = op.classify_inbound_message("Delivery Status Notification (Failure)", "Delivery failed to user", "mailer-daemon@googlemail.com")
-        assert c4 == "bounce_notice"
+        assert c4 in ["bounce_notice", "bounce_permanent"]
 
         # 3. Auto replies
         c5, _ = op.classify_inbound_message("Automatic reply: Out of office", "I am out of the office until next week", "user@test.com")
@@ -1750,6 +1750,243 @@ class TestPhase3InboxSyncAndClassification:
         assert not tripped_now
         assert b_now == 0
         assert "healthy" in r_now.lower()
+
+
+class TestPhase4bHardeningAndVerification:
+    """Tests for Phase 4b verification, auth abort, bounce splitting, and reporting."""
+
+    def test_circuit_breaker_recomputes_on_missing_or_corrupt_state(self, tmp_path):
+        """When state file is missing or corrupt, recompute from log and never default to healthy."""
+        log_file = tmp_path / "outreach_log.csv"
+        state_file = tmp_path / "cb_state.json"
+
+        # Create log with 3 unique bounces
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            f.write("timestamp,recipient_email,business_name,segment,email_type,subject,status,error_message\n")
+            f.write("2026-10-01T10:00:00+05:30,b1@test.com,B1,clinics,initial,Subj,bounced,550\n")
+            f.write("2026-10-01T10:01:00+05:30,b2@test.com,B2,clinics,initial,Subj,bounced,550\n")
+            f.write("2026-10-01T10:02:00+05:30,b3@test.com,B3,clinics,initial,Subj,bounced,550\n")
+
+        # 1. State file missing -> recomputes and trips
+        assert not state_file.exists()
+        tripped, rate, b_cnt, denom, reason = op.check_circuit_breaker(str(log_file), state_file=str(state_file))
+        assert tripped is True
+        assert b_cnt == 3
+        assert denom == 3
+        assert state_file.exists()
+
+        # 2. Corrupt state file with malformed JSON
+        with open(state_file, "w", encoding="utf-8") as f:
+            f.write("{invalid-json-data: not-closed")
+
+        # Must NOT default to healthy! Recomputes from log, trips, and repairs file
+        tripped_corrupt, _, b_c, d_c, _ = op.check_circuit_breaker(str(log_file), state_file=str(state_file))
+        assert tripped_corrupt is True
+        assert b_c == 3
+        # Confirm state file is repaired and valid JSON
+        repaired_state, is_valid = op.load_circuit_breaker_state(str(state_file))
+        assert is_valid is True
+        assert repaired_state.get("is_tripped") is True
+
+    def test_smtp_auth_challenge_stops_batch_immediately(self, tmp_path, monkeypatch):
+        """
+        Reproduce 2026-10-02 failure: When SMTP returns 534 WebLoginRequired,
+        abort run immediately. Exactly 1 failure logged, 0 subsequent sends attempted.
+        """
+        log_file = tmp_path / "outreach_log.csv"
+        leads_file = tmp_path / "leads.csv"
+        state_file = tmp_path / "cb_state.json"
+
+        # Create 5 leads
+        with open(leads_file, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.LEADS_FIELDS)
+            writer.writeheader()
+            for i in range(5):
+                writer.writerow({
+                    "business_name": f"Smile Studio {i}",
+                    "segment": "clinics",
+                    "website": f"https://smilestudio{i}.in",
+                    "email": f"contact@smilestudio{i}.in",
+                    "source_url": "Indiranagar Bengaluru",
+                    "status": "contacted_1",
+                    "last_contacted": "2026-09-24T11:00:00+05:30",
+                    "website_detail": "dental clinic",
+                })
+
+        # Initial log entries
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            f.write("timestamp,recipient_email,business_name,segment,email_type,subject,status,error_message,message_id,original_subject,probe_path\n")
+            for i in range(5):
+                f.write(f"2026-09-24T11:00:00+05:30,contact@smilestudio{i}.in,Smile Studio {i},clinics,initial,Subj,sent,,<orig-{i}>,Subj,probe_250\n")
+
+        # Mock mailbox check to pass
+        monkeypatch.setattr(op, "verify_email_mailbox_live", lambda email: op.MailboxVerifyResult(True, "250 OK", "probe_250"))
+        monkeypatch.setattr(op, "is_in_sending_window", lambda: (True, "Mock window open"))
+        monkeypatch.setattr(op, "fetch_sent_message_id_via_imap", lambda *args, **kwargs: "<msgid>")
+
+        # Mock SMTP to fail on login with Google 534 WebLoginRequired
+        class AuthFailingSMTP:
+            def __init__(self, host, port, timeout=20):
+                pass
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def ehlo(self):
+                pass
+            def starttls(self):
+                pass
+            def login(self, user, password):
+                raise op.smtplib.SMTPAuthenticationError(
+                    534,
+                    b"5.7.9 Please log in with your web browser and then try again. Learn more at https://support.google.com/mail/answer/78754"
+                )
+
+        monkeypatch.setattr(op.smtplib, "SMTP", AuthFailingSMTP)
+        monkeypatch.setenv("SMTP_USER", "sender@sheetbolt.com")
+        monkeypatch.setenv("SMTP_PASS", "app_pass")
+
+        # Run followup outreach
+        op.run_outreach(
+            leads_filepath=str(leads_file),
+            log_filepath=str(log_file),
+            state_file=str(state_file),
+            send_live=True,
+            followup_mode=True,
+            force_window=True,
+            limit=5,
+        )
+
+        # Verify only 1 followup attempt was logged (not 5 in a row!)
+        entries = op.load_outreach_log(str(log_file))
+        followup_attempts = [e for e in entries if e.get("email_type") == "followup"]
+        assert len(followup_attempts) == 1
+        assert followup_attempts[0]["status"] == "failed"
+        assert "534" in followup_attempts[0]["error_message"]
+
+    def test_inbound_bounce_split_delivery_delay_and_permanent(self, tmp_path, monkeypatch):
+        """Test splitting bounce notices into delivery_delay (no suppression) vs bounce_permanent (suppressed)."""
+        log_file = tmp_path / "outreach_log.csv"
+        leads_file = tmp_path / "leads.csv"
+
+        # 1. Classification check
+        delay_subj = "Delivery Status Notification (Delay)"
+        delay_body = "This is an automatically generated Delivery Status Notification.\nTHIS IS A WARNING MESSAGE ONLY.\nYOU DO NOT NEED TO RESEND YOUR MESSAGE.\nDelivery to recipient has been delayed."
+        cat_delay, reason_delay = op.classify_inbound_message(delay_subj, delay_body, "mailer-daemon@googlemail.com")
+        assert cat_delay == "delivery_delay"
+        assert "transient delay; flag for recheck after 72h" in reason_delay
+
+        perm_subj = "Delivery Status Notification (Failure)"
+        perm_body = "550 5.1.1 The email account that you tried to reach does not exist."
+        cat_perm, reason_perm = op.classify_inbound_message(perm_subj, perm_body, "mailer-daemon@googlemail.com")
+        assert cat_perm == "bounce_permanent"
+
+        # 2. sync_inbox behavior check
+        with open(leads_file, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.LEADS_FIELDS)
+            writer.writeheader()
+            writer.writerow({"business_name": "Delay Biz", "segment": "clinics", "email": "delay@test.com", "status": "contacted_1"})
+            writer.writerow({"business_name": "Perm Biz", "segment": "clinics", "email": "perm@test.com", "status": "contacted_1"})
+
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            f.write("timestamp,recipient_email,business_name,segment,email_type,subject,status,error_message,message_id,original_subject,probe_path\n")
+            f.write("2026-10-01T10:00:00+05:30,delay@test.com,Delay Biz,clinics,initial,Subj,sent,,<delay-mid>,Subj,probe_250\n")
+            f.write("2026-10-01T10:00:00+05:30,perm@test.com,Perm Biz,clinics,initial,Subj,sent,,<perm-mid>,Subj,probe_250\n")
+
+        class MockIMAPDelayAndPerm:
+            def select(self, *args, **kwargs):
+                return "OK", [b"2"]
+            def search(self, *args, **kwargs):
+                return "OK", [b"1 2"]
+            def fetch(self, msg_num, *args, **kwargs):
+                if str(msg_num) == "1" or msg_num == b"1":
+                    raw = (
+                        b"From: mailer-daemon@googlemail.com\r\n"
+                        b"Subject: Delivery Status Notification (Delay)\r\n"
+                        b"Message-ID: <bounce-msg-delay@google.com>\r\n"
+                        b"\r\n"
+                        b"Delivery to delay@test.com has been delayed. Will keep trying for 72 hours."
+                    )
+                else:
+                    raw = (
+                        b"From: mailer-daemon@googlemail.com\r\n"
+                        b"Subject: Delivery Status Notification (Failure)\r\n"
+                        b"Message-ID: <bounce-msg-perm@google.com>\r\n"
+                        b"\r\n"
+                        b"550 5.1.1 The email account that you tried to reach does not exist: perm@test.com"
+                    )
+                return "OK", [(b"1 (RFC822)", raw)]
+            def logout(self):
+                pass
+
+        results = op.sync_inbox(
+            log_filepath=str(log_file),
+            leads_filepath=str(leads_file),
+            lead_files=[str(leads_file)],
+            imap_conn=MockIMAPDelayAndPerm(),
+            dry_run=False,
+        )
+
+        assert results.get("delivery_delays", 0) == 1
+        assert results.get("bounces", 0) == 1
+
+        leads = op.load_leads(str(leads_file))
+        delay_lead = next(l for l in leads if l["email"] == "delay@test.com")
+        perm_lead = next(l for l in leads if l["email"] == "perm@test.com")
+
+        # delay@test.com is NOT suppressed (remains contacted_1)
+        assert delay_lead["status"] == "contacted_1"
+        # perm@test.com IS suppressed (status changed to bounced)
+        assert perm_lead["status"] == "bounced"
+
+    def test_unique_prospects_reporting(self, tmp_path):
+        """Test reporting generates unique prospect breakdown with denominators."""
+        log_file = tmp_path / "outreach_log.csv"
+        leads_file1 = tmp_path / "leads1.csv"
+        leads_file2 = tmp_path / "leads2.csv"
+
+        with open(leads_file1, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.LEADS_FIELDS)
+            writer.writeheader()
+            for i in range(10):
+                writer.writerow({"business_name": f"BizA{i}", "segment": "clinics", "email": f"a{i}@test.com", "status": "new"})
+
+        with open(leads_file2, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.LEADS_FIELDS)
+            writer.writeheader()
+            for i in range(5):
+                writer.writerow({"business_name": f"BizB{i}", "segment": "agencies", "email": f"b{i}@test.com", "status": "new"})
+
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            f.write("timestamp,recipient_email,business_name,segment,email_type,subject,status,error_message\n")
+            # 4 sent in file1, 1 bounced
+            for i in range(4):
+                f.write(f"2026-10-01T10:00:00+05:30,a{i}@test.com,BizA{i},clinics,initial,Subj,sent,\n")
+            f.write("2026-10-01T10:05:00+05:30,a0@test.com,BizA0,clinics,initial,Subj,bounced,550\n")
+            # 2 followups in file1
+            f.write("2026-10-05T10:00:00+05:30,a1@test.com,BizA1,clinics,followup,Subj,sent,\n")
+            f.write("2026-10-05T10:00:00+05:30,a2@test.com,BizA2,clinics,followup,Subj,sent,\n")
+            # 2 sent in file2
+            for i in range(2):
+                f.write(f"2026-10-01T10:00:00+05:30,b{i}@test.com,BizB{i},agencies,initial,Subj,sent,\n")
+
+        rep = op.generate_report(log_filepath=str(log_file), lead_files=[str(leads_file1), str(leads_file2)])
+
+        assert rep["files"]["leads1.csv"]["total_prospects"] == 10
+        assert rep["files"]["leads1.csv"]["initial_sent"] == 4
+        assert rep["files"]["leads1.csv"]["bounced"] == 1
+        assert rep["files"]["leads1.csv"]["followed_up"] == 2
+        assert rep["files"]["leads1.csv"]["suppressed"] == 1
+
+        assert rep["files"]["leads2.csv"]["total_prospects"] == 5
+        assert rep["files"]["leads2.csv"]["initial_sent"] == 2
+        assert rep["files"]["leads2.csv"]["bounced"] == 0
+
+        assert rep["global"]["total_prospects"] == 15
+        assert rep["global"]["initial_sent"] == 6
+        assert rep["global"]["bounced"] == 1
+        assert rep["global"]["followed_up"] == 2
+
 
 
 

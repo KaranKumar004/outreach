@@ -48,5 +48,8 @@ __pycache__/
 # local scratch and backups
 scratch/
 backups/
+circuit_breaker_state.json
+circuit_breaker_resets.log
+
 
 
