@@ -86,7 +86,14 @@ LEADS_FIELDS = [
     "status",
     "last_contacted",
     "website_detail",
+    "phone",
+    "whatsapp",
+    "channel",
+    "manual_status",
 ]
+
+CIRCUIT_BREAKER_STATE_FILE = "circuit_breaker_state.json"
+RESET_BREAKER_LOG_FILE = "circuit_breaker_resets.log"
 
 OUTREACH_LOG_FIELDS = [
     "timestamp",
@@ -99,6 +106,7 @@ OUTREACH_LOG_FIELDS = [
     "error_message",
     "message_id",
     "original_subject",
+    "probe_path",
 ]
 
 # Supported business segments
@@ -142,12 +150,22 @@ BROWSER_HEADERS = {
 }
 
 # Safety Limits
-DAILY_SEND_CAP = 25
+DAILY_SEND_CAP = 10
 HARD_DAILY_CAP_LIMIT = 25  # Daily cap guard: hard limit that cannot be raised dynamically or via CLI
 OVERRIDE_LOG_FILE = "circuit_breaker_overrides.log"
 BOUNCE_RATE_LIMIT = 0.05
 MIN_DELAY_SECONDS = 60
 MAX_DELAY_SECONDS = 180
+
+# Lead file configuration: domestic Bengaluru leads enabled by default.
+# Abroad agencies (UK/EU) and Austin (US) are disabled by default behind config flags.
+# CAUTION: UK GDPR / PECR (B2B corporate subscriber rules), EU GDPR (opt-in requirements),
+# and US CAN-SPAM Act compliance rules must be reviewed and verified before enabling international lead files.
+ENABLED_LEAD_FILES = [
+    "leads.csv",
+    # "leads_abroad_agencies.csv",  # Disabled: verify UK/EU GDPR & PECR regulations before enabling
+    # "leads_austin.csv",           # Disabled: verify US CAN-SPAM Act compliance before enabling
+]
 
 def mask_email(email_str):
     """Mask email address for privacy in console outputs and reports, e.g. j***n@domain.com."""
@@ -866,17 +884,79 @@ def get_mx_hosts(domain, timeout=5):
     except Exception:
         return []
 
+class MailboxVerifyResult:
+    """Result object for mailbox verification that safely unpacks as (is_valid, reason)."""
+    def __init__(self, is_valid: bool, reason: str, probe_path: str):
+        self.is_valid = bool(is_valid)
+        self.reason = str(reason)
+        self.probe_path = str(probe_path)
+
+    def __iter__(self):
+        yield self.is_valid
+        yield self.reason
+
+    def __getitem__(self, index):
+        return (self.is_valid, self.reason)[index]
+
+    def __bool__(self):
+        return self.is_valid
+
+    def __repr__(self):
+        return f"MailboxVerifyResult(is_valid={self.is_valid}, reason={self.reason!r}, probe_path={self.probe_path!r})"
+
+_PORT_25_CHECKED = False
+_PORT_25_REACHABLE = None
+
+def check_port_25_reachability(timeout=3, force=False):
+    """
+    One-time startup check to verify if outbound connections on port 25 are permitted by ISP/firewall.
+    Prints a clear warning if port 25 is blocked so operator knows why SMTP probes may fail.
+    """
+    global _PORT_25_CHECKED, _PORT_25_REACHABLE
+    if _PORT_25_CHECKED and not force:
+        return _PORT_25_REACHABLE
+
+    test_hosts = ["gmail-smtp-in.l.google.com", "mta5.am0.yahoodns.net", "outlook-com.olc.protection.outlook.com"]
+    reachable = False
+    for host in test_hosts:
+        try:
+            sock = socket.create_connection((host, 25), timeout=timeout)
+            sock.close()
+            reachable = True
+            break
+        except Exception:
+            continue
+
+    _PORT_25_CHECKED = True
+    _PORT_25_REACHABLE = reachable
+    if not reachable:
+        print("\n" + "!" * 75)
+        print("[WARNING] Outbound SMTP port 25 appears BLOCKED or filtered by your ISP/firewall.")
+        print("          Direct SMTP mailbox verification probes will fail ('probe_error')")
+        print("          and leads will be marked 'review_flagged' / 'unverified'.")
+        print("          To resolve, run on an unblocked network, VPN, or use authenticated relay.")
+        print("!" * 75 + "\n")
+    return reachable
+
 def verify_email_mailbox_live(email, timeout=7):
     """
     Perform a direct SMTP handshake check to determine if the recipient mailbox exists.
-    Returns (is_valid, reason).
+    Returns MailboxVerifyResult (unpacks as (is_valid, reason)) with probe_path attribute:
+      - probe_250:   250 OK rcpt accepted (is_valid=True)
+      - probe_5xx:   5xx permanent rejection (is_valid=False)
+      - probe_4xx:   4xx transient error / greylisting treated as unverified (is_valid=False)
+      - probe_error: connection refused / timeout / port 25 blocked (is_valid=False)
+      - no_mx:       domain has no active MX records (is_valid=False)
     """
+    # Trigger one-time port 25 reachability check
+    check_port_25_reachability(timeout=3)
+
     if not email or "@" not in email:
-        return False, "Invalid email format"
+        return MailboxVerifyResult(False, "Invalid email format", "invalid_format")
     domain = extract_domain(email)
     mx_hosts = get_mx_hosts(domain, timeout=timeout)
     if not mx_hosts:
-        return False, f"Domain '{domain}' has no active MX records"
+        return MailboxVerifyResult(False, f"Domain '{domain}' has no active MX records", "no_mx")
 
     primary_mx = mx_hosts[0]
     try:
@@ -885,12 +965,15 @@ def verify_email_mailbox_live(email, timeout=7):
             s.ehlo("sheetboltanalytics.netlify.app")
             s.mail("sheetbolt.analytics@gmail.com")
             code, msg = s.rcpt(email)
+            msg_str = msg.decode("utf-8", errors="ignore") if isinstance(msg, bytes) else str(msg)
             if code == 250:
-                return True, "SMTP probe passed (250 OK: rcpt accepted)"
+                return MailboxVerifyResult(True, "SMTP probe passed (250 OK: rcpt accepted)", "probe_250")
             elif code >= 500:
-                msg_str = msg.decode("utf-8", errors="ignore") if isinstance(msg, bytes) else str(msg)
-                return False, f"SMTP probe rejected by server ({code}: {msg_str[:60].strip()})"
-            return True, f"SMTP probe responded with {code} (permissive response)"
+                return MailboxVerifyResult(False, f"SMTP probe rejected by server ({code}: {msg_str[:60].strip()})", "probe_5xx")
+            elif 400 <= code < 500:
+                # 4xx transient rejection/greylisting: treat as unverified rather than valid
+                return MailboxVerifyResult(False, f"unverified: SMTP probe transient failure ({code}: {msg_str[:60].strip()})", "probe_4xx")
+            return MailboxVerifyResult(False, f"unverified: SMTP probe unexpected response ({code}: {msg_str[:60].strip()})", "probe_other")
         finally:
             try:
                 s.quit()
@@ -903,7 +986,7 @@ def verify_email_mailbox_live(email, timeout=7):
         # Fail closed: connection refused, port 25 blocked, timeout, or SSL required
         # Lead goes to review rather than sent blindly
         err_msg = str(e)[:60].strip() or type(e).__name__
-        return False, f"unverified: SMTP port 25 probe failed ({err_msg})"
+        return MailboxVerifyResult(False, f"unverified: SMTP port 25 probe failed ({err_msg})", "probe_error")
 
 
 # ----------------- DOMAIN MATCHING & REVIEW FLAGGING -----------------
@@ -2032,53 +2115,146 @@ def get_daily_sent_count(log_filepath=OUTREACH_LOG_CSV, target_date=None):
                     pass
     return count
 
-def check_circuit_breaker(log_filepath=OUTREACH_LOG_CSV, window_size=30):
+def load_circuit_breaker_state(state_file=CIRCUIT_BREAKER_STATE_FILE):
+    """Load persistent circuit breaker state from JSON file."""
+    if not state_file or not os.path.exists(state_file):
+        return {}
+    try:
+        with open(state_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_circuit_breaker_state(state_data, state_file=CIRCUIT_BREAKER_STATE_FILE):
+    """Save persistent circuit breaker state atomically."""
+    if not state_file:
+        return False
+    tmp_path = str(state_file) + ".tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(state_data, f, indent=2)
+        os.replace(tmp_path, state_file)
+        return True
+    except Exception as e:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        return False
+
+def reset_circuit_breaker(reason, state_file=CIRCUIT_BREAKER_STATE_FILE, reset_log_file=RESET_BREAKER_LOG_FILE):
     """
-    Bounce circuit breaker:
-    - Denominator = unique prospects with an initial email attempted (sent, failed, or bounced).
-    - Numerator = unique prospects bounced.
-    - Rolling window of the last window_size (default 30) initial attempted unique prospects (all if fewer).
-    - Trip if unique bounces >= 3 OR (window >= 20 AND rate > 5%).
-    - Follow-ups never count toward initial denominator or bounces.
+    Manually reset a tripped circuit breaker. Requires a documented operational justification.
+    Records the reset event to reset_log_file and clears the trip lock in state_file.
     """
+    if not reason or not reason.strip():
+        raise ValueError("A documented operational justification is required to reset the circuit breaker (--reason '<text>').")
+
+    now_iso = get_ist_now().isoformat()
+    user = os.environ.get("USERNAME") or os.environ.get("USER") or "unknown"
+    prev_state = load_circuit_breaker_state(state_file)
+    prev_reason = prev_state.get("reason", "unknown")
+
+    log_line = f"[{now_iso}] USER: {user} | ACTION: RESET | REASON: {reason.strip()} | PRIOR_TRIP: {prev_reason}\n"
+    try:
+        with open(reset_log_file, "a", encoding="utf-8") as f:
+            f.write(log_line)
+    except Exception as e:
+        print(f"[!] Warning: Failed to write to {reset_log_file}: {e}")
+
+    new_state = {
+        "is_tripped": False,
+        "is_reset": True,
+        "reset_at": now_iso,
+        "reset_reason": reason.strip(),
+        "reset_by": user,
+    }
+    save_circuit_breaker_state(new_state, state_file=state_file)
+    print(f"\n[CIRCUIT BREAKER RESET] Breaker successfully reset and unlocked by '{user}'.")
+    print(f"Reason: {reason.strip()}")
+    print(f"Logged to: {reset_log_file}\n")
+    return True
+
+def check_circuit_breaker(log_filepath=OUTREACH_LOG_CSV, state_file=None, window_size=None, enabled_files=None):
+    """
+    Persistent Bounce Circuit Breaker:
+    - Evaluates across ALL initial send history using unique initial prospects (no file-scope exclusion).
+    - Window rolloff is removed: adding more sends cannot rolloff or hide earlier bounces.
+    - Tripped if unique initial bounces >= 3 OR (total initial prospects >= 20 and bounce rate > 5%).
+    - Once tripped, the breaker stays tripped until manually reset via --reset-breaker --reason "<text>".
+    """
+    if state_file is None and log_filepath == OUTREACH_LOG_CSV:
+        state_file = CIRCUIT_BREAKER_STATE_FILE
+
+    if state_file:
+        state = load_circuit_breaker_state(state_file)
+        if state.get("is_tripped", False):
+            return True, state.get("rate", 0.0), state.get("bounces", 0), state.get("denominator", 0), state.get("reason", "Circuit breaker is tripped and locked. Requires manual reset: --reset-breaker --reason '<text>'")
+        reset_at = state.get("reset_at") if state.get("is_reset", False) else None
+    else:
+        reset_at = None
+
     entries = load_outreach_log(log_filepath)
-    
-    # Track initial outreach attempts in chronological order
-    initial_attempts = []
-    seen_prospects = set()
-    bounced_prospects = set()
 
     # Pass 1: find all bounced prospects
+    bounced_prospects = set()
     for e in entries:
         st = (e.get("status") or "").lower()
         em = normalize_email(e.get("recipient_email", ""))
+        ts = e.get("timestamp", "")
+        if reset_at and ts and ts <= reset_at:
+            continue
         if em and st == "bounced":
             bounced_prospects.add(em)
 
-    # Pass 2: find unique prospects with initial attempt (sent, failed, or initial-bounced)
+    # Pass 2: find unique prospects with initial attempts across all send history (regardless of file scope)
+    initial_attempts = []
+    seen_prospects = set()
     for e in entries:
         em = normalize_email(e.get("recipient_email", ""))
         e_type = (e.get("email_type") or "").lower()
         st = (e.get("status") or "").lower()
+        ts = e.get("timestamp", "")
         if not em or e_type != "initial":
+            continue
+        if reset_at and ts and ts <= reset_at:
             continue
         if st in ["sent", "failed", "bounced"] and em not in seen_prospects:
             seen_prospects.add(em)
             initial_attempts.append(em)
 
-    # Rolling window: last 30 unique prospects
-    window = initial_attempts[-window_size:] if len(initial_attempts) > window_size else initial_attempts
-    denom = len(window)
-    bounces_in_window = sum(1 for p in window if p in bounced_prospects)
-    rate = (bounces_in_window / denom) if denom > 0 else 0.0
+    denom = len(initial_attempts)
+    bounces_count = sum(1 for p in initial_attempts if p in bounced_prospects)
+    rate = (bounces_count / denom) if denom > 0 else 0.0
 
-    if bounces_in_window >= 3:
-        return True, rate, bounces_in_window, denom, f"Circuit breaker tripped: {bounces_in_window} bounces recorded ({bounces_in_window} unique bounces in rolling window of {denom} initial prospects; limit is 3)."
+    if bounces_count >= 3:
+        reason = f"Circuit breaker tripped: {bounces_count} bounces recorded across send history ({bounces_count} unique bounces; {bounces_count}/{denom}; limit is 3). Breaker locked until manual reset."
+        if state_file:
+            save_circuit_breaker_state({
+                "is_tripped": True,
+                "tripped_at": get_ist_now().isoformat(),
+                "reason": reason,
+                "bounces": bounces_count,
+                "denominator": denom,
+                "rate": rate,
+            }, state_file=state_file)
+        return True, rate, bounces_count, denom, reason
 
     if denom >= 20 and rate > BOUNCE_RATE_LIMIT:
-        return True, rate, bounces_in_window, denom, f"Circuit breaker tripped: bounce rate is {rate:.1%} ({bounces_in_window}/{denom}) in rolling window, exceeding 5% limit."
+        reason = f"Circuit breaker tripped: bounce rate is {rate:.1%} ({bounces_count}/{denom}) across send history, exceeding 5% limit. Breaker locked until manual reset."
+        if state_file:
+            save_circuit_breaker_state({
+                "is_tripped": True,
+                "tripped_at": get_ist_now().isoformat(),
+                "reason": reason,
+                "bounces": bounces_count,
+                "denominator": denom,
+                "rate": rate,
+            }, state_file=state_file)
+        return True, rate, bounces_count, denom, reason
 
-    return False, rate, bounces_in_window, denom, f"Circuit breaker healthy ({bounces_in_window}/{denom} bounces, rate {rate:.1%})."
+    return False, rate, bounces_count, denom, f"Circuit breaker healthy ({bounces_count}/{denom} bounces, rate {rate:.1%})."
 
 def get_bounce_rate(log_filepath=OUTREACH_LOG_CSV):
     tripped, rate, bounce_cnt, denom, msg = check_circuit_breaker(log_filepath)
@@ -2731,10 +2907,19 @@ def get_eligible_leads(leads, followup_mode=False, allowed_cities=None, log_file
 
     return eligible_leads
 
-def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=False, warmup=True, segment_filter=None, override_reason="", leads_filepath=None, skip_location_audit=False, override_circuit_breaker=False):
+def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=False, warmup=True, segment_filter=None, override_reason="", leads_filepath=None, log_filepath=None, skip_location_audit=False, override_circuit_breaker=False, enabled_files=None):
     """Main outreach execution loop with dry-run default, location audit, segment audit, and review flagging."""
+    if enabled_files is None:
+        enabled_files = ENABLED_LEAD_FILES
     if leads_filepath is None:
-        leads_filepath = LEADS_CSV
+        leads_filepath = enabled_files[0] if enabled_files else LEADS_CSV
+    if log_filepath is None:
+        log_filepath = OUTREACH_LOG_CSV
+
+    if leads_filepath not in enabled_files and leads_filepath in ["leads_abroad_agencies.csv", "leads_austin.csv"]:
+        print(f"\n[ERROR] '{leads_filepath}' is disabled by default in ENABLED_LEAD_FILES.")
+        print("        Verify UK/EU GDPR & PECR regulations or US CAN-SPAM Act compliance before enabling.")
+        return
 
     # 1. Audit locations in leads file
     if not skip_location_audit:
@@ -2781,7 +2966,7 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
         return
 
     # Check circuit breaker
-    is_tripped, rate, bounce_cnt, sent_cnt, cb_reason = check_circuit_breaker()
+    is_tripped, rate, bounce_cnt, sent_cnt, cb_reason = check_circuit_breaker(log_filepath=log_filepath, enabled_files=enabled_files)
     if is_tripped:
         actual_reason = override_reason or ("Operator override via flag" if override_circuit_breaker else "")
         if actual_reason:
@@ -2945,9 +3130,10 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
 
         if send_live:
             # Pre-send live mailbox check to eliminate any bounce risk
-            mb_ok, mb_reason = verify_email_mailbox_live(lead["email"])
-            if not mb_ok:
-                print(f"\n[PRE-SEND VERIFICATION REJECTED] Skipping {lead['business_name']} ({mask_email(lead['email'])}): {mb_reason}")
+            mb_res = verify_email_mailbox_live(lead["email"])
+            probe_path = getattr(mb_res, "probe_path", "probe_unknown")
+            if not mb_res.is_valid:
+                print(f"\n[PRE-SEND VERIFICATION REJECTED] Skipping {lead['business_name']} ({mask_email(lead['email'])}): {mb_res.reason} [{probe_path}]")
                 lead["status"] = "review_flagged"
                 save_leads(leads, leads_filepath)
                 continue
@@ -2979,7 +3165,8 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
                     "error_message": "",
                     "message_id": final_msgid,
                     "original_subject": subject if not followup_mode else orig_subj,
-                })
+                    "probe_path": probe_path,
+                }, filepath=log_filepath)
                 save_leads(leads, leads_filepath)
                 print(f"    [SENT OK] Marked status as '{lead['status']}'.")
 
@@ -2999,7 +3186,6 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
                     lead["status"] = "bounced"
                     save_leads(leads, leads_filepath)
 
-
                 append_outreach_log({
                     "timestamp": get_ist_now().isoformat(),
                     "recipient_email": lead["email"],
@@ -3011,29 +3197,20 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
                     "error_message": err_str,
                     "message_id": "",
                     "original_subject": subject if not followup_mode else orig_subj,
-                })
+                    "probe_path": probe_path,
+                }, filepath=log_filepath)
 
                 if is_auth_error:
                     print(f"\n[!] SMTP Authentication / Login Challenge detected ({err_str}). Aborting batch.")
                     break
 
-                tripped, _, _, _, reason = check_circuit_breaker()
+                tripped, _, _, _, reason = check_circuit_breaker(log_filepath=log_filepath, enabled_files=enabled_files)
                 if tripped:
                     print(f"\n[!] Circuit breaker triggered after bounce ({reason}). Aborting batch.")
                     break
         else:
-            append_outreach_log({
-                "timestamp": get_ist_now().isoformat(),
-                "recipient_email": lead["email"],
-                "business_name": lead["business_name"],
-                "segment": lead["segment"],
-                "email_type": email_type,
-                "subject": subject,
-                "status": "dry_run",
-                "error_message": "",
-                "message_id": in_reply_to or "<placeholder-msgid@sheetboltanalytics.netlify.app>",
-                "original_subject": subject if not followup_mode else orig_subj,
-            })
+            # Dry-run mode: do not write to outreach_log.csv or leads file
+            pass
 
     display_count = min(len(preview_outputs), limit or 6)
     print(f"\n--- SHOWING FIRST {display_count} EMAILS FOR REVIEW & APPROVAL ---")
@@ -3079,15 +3256,16 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
 
 # ----------------- STEP 5: STATE MANAGEMENT & REPORTING -----------------
 
-def mark_lead_state(email, new_status, reason="", log_filepath=None):
+def mark_lead_state(email, new_status, reason="", log_filepath=None, lead_files=None):
     if new_status not in ["replied", "unsubscribed", "bounced", "rejected_location", "review_flagged", "unclassified_hold", "new"]:
         raise ValueError(f"Invalid status: {new_status}")
 
     clean = normalize_email(email)
-    import glob
-    lead_files = set(glob.glob("leads*.csv"))
-    if LEADS_CSV:
-        lead_files.add(LEADS_CSV)
+    if lead_files is None:
+        import glob
+        lead_files = set(glob.glob("leads*.csv"))
+        if LEADS_CSV:
+            lead_files.add(LEADS_CSV)
     found_any = False
     biz_name = ""
     biz_segment = ""
@@ -3123,6 +3301,28 @@ def mark_lead_state(email, new_status, reason="", log_filepath=None):
     else:
         print(f"[STATUS UPDATED] Recorded '{new_status}' for '{mask_email(clean)}' in outreach_log.csv (not present in leads CSV).")
 
+def extract_ndr_diagnostic(body):
+    """Extract NDR diagnostic code/reason from bounce notification text."""
+    resp_match = re.search(r"The response was:\s*(?:<[^>]+>)*\s*([^\n<]+)", body or "", re.I)
+    if resp_match:
+        return resp_match.group(1).strip()
+    for line in (body or "").splitlines():
+        line_s = line.strip()
+        if any(k in line_s.lower() for k in ["dns error", "status code: 550", "status: 550", "status code:", "status:", "diagnostic-code", "user unknown", "does not exist", "recipient not found", "undeliverable"]):
+            return line_s
+    return "Automated delivery failure / bounce notification"
+
+def classify_bounce_cause(diag_text, body=""):
+    """Classify bounce cause into invalid mailbox, domain/DNS, provider rejection, or other."""
+    combined = (str(diag_text) + " " + str(body)).lower()
+    if any(k in combined for k in ["does not exist", "user unknown", "no such user", "nosuchuser", "address not found", "recipient not found", "invalid recipient"]):
+        return "invalid mailbox"
+    elif any(k in combined for k in ["domain not found", "no mx", "dns error", "dns type", "name or service not known", "unrouteable address"]):
+        return "domain/DNS"
+    elif any(k in combined for k in ["status code: 550", "status: 550", "rejected", "blocked", "spam", "blacklisted", "policy", "relay access denied", "dmarc", "spf"]):
+        return "provider rejection"
+    return "other"
+
 def classify_inbound_message(subject, body, from_addr, headers=None):
     """
     Deterministic rule-based classification of inbound emails.
@@ -3149,7 +3349,9 @@ def classify_inbound_message(subject, body, from_addr, headers=None):
         "message could not be delivered", "delivery failure"
     ]
     if any(s in from_lower for s in bounce_senders) or any(p in subj_lower for p in bounce_subj_patterns):
-        return "bounce_notice", "Automated delivery failure / bounce notification"
+        diag = extract_ndr_diagnostic(body)
+        cause = classify_bounce_cause(diag, body)
+        return "bounce_notice", f"[{cause}] {diag}"
 
     # 2. Auto-reply / Out of office
     auto_subj_patterns = [
@@ -3226,15 +3428,18 @@ def classify_inbound_message(subject, body, from_addr, headers=None):
     # 8. Fallback for any other prospect reply
     return "needs_review", "Inbound prospect reply (needs manual review)"
 
-def sync_inbox(log_filepath=OUTREACH_LOG_CSV, max_messages=50, imap_conn=None):
+def sync_inbox(log_filepath=OUTREACH_LOG_CSV, max_messages=50, imap_conn=None, leads_filepath=None, lead_files=None, dry_run=False):
     """
-    Read IMAP inbox, match messages to leads via In-Reply-To/References or sender matching,
-    classify responses deterministically, and update state idempotently.
-    Prints masked summary of replies and unsubs. No auto-replies sent.
+    Read IMAP inbox, Spam, and All Mail folders (read-only), match messages to leads via
+    In-Reply-To/References or sender matching, classify responses deterministically,
+    and update state idempotently.
+    In dry-run mode, classifies and prints but writes nothing.
     """
     print("\n" + "=" * 70)
-    print("📥 SHEETBOLT INBOX & UNSUBSCRIBE SYNC (IMAP)")
+    print(f"📥 SHEETBOLT INBOX & UNSUBSCRIBE SYNC (IMAP) {'[DRY-RUN]' if dry_run else ''}")
     print("=" * 70)
+    if dry_run:
+        print("[DRY-RUN] Simulation mode active. No lead status or log files will be modified.\n")
 
     # 1. Build lookup tables
     log_entries = load_outreach_log(log_filepath)
@@ -3250,11 +3455,14 @@ def sync_inbox(log_filepath=OUTREACH_LOG_CSV, max_messages=50, imap_conn=None):
 
     # Build map of existing leads across all lead files
     all_leads = {}
-    import glob
-    lead_files = set(glob.glob("leads*.csv"))
-    if LEADS_CSV:
-        lead_files.add(LEADS_CSV)
-    for fpath in lead_files:
+    if lead_files is not None:
+        target_lead_files = set(lead_files)
+    else:
+        import glob
+        target_lead_files = set(glob.glob("leads*.csv"))
+        if LEADS_CSV:
+            target_lead_files.add(LEADS_CSV)
+    for fpath in target_lead_files:
         try:
             for l in load_leads(fpath):
                 lem = normalize_email(l.get("email", ""))
@@ -3295,140 +3503,165 @@ def sync_inbox(log_filepath=OUTREACH_LOG_CSV, max_messages=50, imap_conn=None):
         "items": []
     }
 
+    folders_to_search = [
+        ("INBOX", ["INBOX"]),
+        ("Spam", ["[Gmail]/Spam", "Spam", "Junk"]),
+        ("All Mail", ["[Gmail]/All Mail", "All Mail"]),
+    ]
+
+    seen_msg_ids = set()
+    already_synced_mids = set()
+    for e in log_entries:
+        if (e.get("email_type") or "").startswith("inbox_sync"):
+            smid = (e.get("message_id") or "").strip()
+            if smid:
+                already_synced_mids.add(smid)
+
     try:
-        status, _ = mail.select("INBOX", readonly=True)
-        if status != "OK":
-            print(f"[!] Could not select INBOX (status: {status}).")
-            return results
+        for folder_label, candidate_names in folders_to_search:
+            selected_name = None
+            for cand in candidate_names:
+                try:
+                    status, _ = mail.select(cand, readonly=True)
+                    if status == "OK":
+                        selected_name = cand
+                        break
+                except Exception:
+                    continue
 
-        status, data = mail.search(None, "ALL")
-        if status != "OK" or not data or not data[0]:
-            print("[INFO] No messages found in INBOX.")
-            return results
-
-        msg_nums = data[0].split()
-        results["total_messages"] = len(msg_nums)
-        msg_nums = msg_nums[-max_messages:]
-
-        already_synced_mids = set()
-        for e in log_entries:
-            if (e.get("email_type") or "").startswith("inbox_sync"):
-                smid = (e.get("message_id") or "").strip()
-                if smid:
-                    already_synced_mids.add(smid)
-
-        for num in msg_nums:
-            res, mdata = mail.fetch(num, "(RFC822)")
-            if res != "OK" or not mdata or not mdata[0]:
+            if not selected_name:
                 continue
 
-            raw_email = mdata[0][1]
-            msg = email.message_from_bytes(raw_email)
+            status, data = mail.search(None, "ALL")
+            if status != "OK" or not data or not data[0]:
+                continue
 
-            msg_id = (msg.get("Message-ID") or "").strip()
-            in_reply_to = (msg.get("In-Reply-To") or "").strip()
-            references = (msg.get("References") or "").strip()
-            from_hdr = msg.get("From", "")
-            _, from_email = parseaddr(from_hdr)
-            clean_from = normalize_email(from_email)
-            subject = msg.get("Subject", "")
-            date_hdr = msg.get("Date", "")
+            msg_nums = data[0].split()
+            results["total_messages"] += len(msg_nums)
+            folder_nums = msg_nums[-max_messages:]
 
-            body = ""
-            if msg.is_multipart():
-                for part in msg.walk():
-                    ctype = part.get_content_type()
-                    cdispo = str(part.get("Content-Disposition"))
-                    if ctype == "text/plain" and "attachment" not in cdispo:
-                        payload = part.get_payload(decode=True)
-                        if payload:
-                            body += payload.decode("utf-8", errors="ignore")
-            else:
-                payload = msg.get_payload(decode=True)
-                if payload:
-                    body = payload.decode("utf-8", errors="ignore")
+            for num in folder_nums:
+                res, mdata = mail.fetch(num, "(RFC822)")
+                if res != "OK" or not mdata or not mdata[0]:
+                    continue
 
-            matched_lead = None
-            matched_email = ""
+                raw_email = mdata[0][1]
+                msg = email.message_from_bytes(raw_email)
 
-            refs_to_check = [in_reply_to] + references.split()
-            for ref in refs_to_check:
-                clean_ref = ref.strip()
-                if clean_ref and clean_ref in msg_id_to_lead:
-                    matched_log = msg_id_to_lead[clean_ref]
-                    matched_email = normalize_email(matched_log.get("recipient_email", ""))
-                    matched_lead = all_leads.get(matched_email)
-                    break
+                msg_id = (msg.get("Message-ID") or "").strip()
+                if msg_id and msg_id in seen_msg_ids:
+                    continue
+                if msg_id:
+                    seen_msg_ids.add(msg_id)
 
-            if not matched_email and clean_from in contacted_emails:
-                matched_email = clean_from
-                matched_lead = all_leads.get(matched_email)
+                in_reply_to = (msg.get("In-Reply-To") or "").strip()
+                references = (msg.get("References") or "").strip()
+                from_hdr = msg.get("From", "")
+                _, from_email = parseaddr(from_hdr)
+                clean_from = normalize_email(from_email)
+                subject = msg.get("Subject", "")
+                date_hdr = msg.get("Date", "")
 
-            if not matched_email and clean_from in all_leads:
-                matched_email = clean_from
-                matched_lead = all_leads.get(matched_email)
+                body = ""
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        ctype = part.get_content_type()
+                        cdispo = str(part.get("Content-Disposition"))
+                        if ctype == "text/plain" and "attachment" not in cdispo:
+                            payload = part.get_payload(decode=True)
+                            if payload:
+                                body += payload.decode("utf-8", errors="ignore")
+                else:
+                    payload = msg.get_payload(decode=True)
+                    if payload:
+                        body = payload.decode("utf-8", errors="ignore")
 
-            is_bounce_sender = any(x in clean_from for x in ["mailer-daemon", "postmaster"])
-            if not matched_email and is_bounce_sender:
-                for candidate_em in contacted_emails:
-                    if candidate_em in body.lower():
-                        matched_email = candidate_em
+                matched_lead = None
+                matched_email = ""
+
+                refs_to_check = [in_reply_to] + references.split()
+                for ref in refs_to_check:
+                    clean_ref = ref.strip()
+                    if clean_ref and clean_ref in msg_id_to_lead:
+                        matched_log = msg_id_to_lead[clean_ref]
+                        matched_email = normalize_email(matched_log.get("recipient_email", ""))
                         matched_lead = all_leads.get(matched_email)
                         break
 
-            if not matched_email:
-                continue
+                if not matched_email and clean_from in contacted_emails:
+                    matched_email = clean_from
+                    matched_lead = all_leads.get(matched_email)
 
-            results["matched_messages"] += 1
+                if not matched_email and clean_from in all_leads:
+                    matched_email = clean_from
+                    matched_lead = all_leads.get(matched_email)
 
-            if msg_id and msg_id in already_synced_mids:
-                results["skipped_already_synced"] += 1
-                continue
+                is_bounce_sender = any(x in clean_from for x in ["mailer-daemon", "postmaster"])
+                if not matched_email and is_bounce_sender:
+                    for candidate_em in contacted_emails:
+                        if candidate_em in body.lower():
+                            matched_email = candidate_em
+                            matched_lead = all_leads.get(matched_email)
+                            break
 
-            category, cat_reason = classify_inbound_message(subject, body, clean_from, headers=msg)
-            biz_name = (matched_lead.get("business_name") if matched_lead else "") or (contacted_emails.get(matched_email, {}).get("business_name", ""))
+                if not matched_email:
+                    continue
 
-            action_taken = ""
-            if category == "unsubscribe":
-                mark_lead_state(matched_email, "unsubscribed", reason=cat_reason, log_filepath=log_filepath)
-                results["unsubscribes"] += 1
-                action_taken = "Suppressed (unsubscribed across all lead lists)"
-            elif category == "bounce_notice":
-                mark_lead_state(matched_email, "bounced", reason=cat_reason, log_filepath=log_filepath)
-                results["bounces"] += 1
-                action_taken = "Marked bounced (follow-ups cancelled)"
-            elif category == "auto_reply":
-                results["auto_replies"] += 1
-                action_taken = "Ignored (auto-responder / OOO - not a genuine reply)"
-            else:
-                mark_lead_state(matched_email, "replied", reason=f"{category}: {cat_reason}", log_filepath=log_filepath)
-                results[category] = results.get(category, 0) + 1
-                action_taken = f"Marked replied ({category}) - manual review needed"
+                results["matched_messages"] += 1
 
-            append_outreach_log({
-                "timestamp": get_ist_now().isoformat(),
-                "recipient_email": matched_email,
-                "business_name": biz_name,
-                "segment": (matched_lead.get("segment") if matched_lead else "") or (contacted_emails.get(matched_email, {}).get("segment", "")),
-                "email_type": f"inbox_sync:{category}",
-                "subject": subject[:80],
-                "status": "unsubscribed" if category == "unsubscribe" else ("bounced" if category == "bounce_notice" else ("auto_reply" if category == "auto_reply" else "replied")),
-                "error_message": cat_reason,
-                "message_id": msg_id,
-                "original_subject": subject[:80],
-            }, filepath=log_filepath)
-            if msg_id:
-                already_synced_mids.add(msg_id)
+                if msg_id and msg_id in already_synced_mids:
+                    results["skipped_already_synced"] += 1
+                    continue
 
-            results["items"].append({
-                "email": mask_email(matched_email),
-                "business_name": biz_name,
-                "category": category,
-                "reason": cat_reason,
-                "action": action_taken,
-                "subject": subject,
-                "date": date_hdr,
-            })
+                category, cat_reason = classify_inbound_message(subject, body, clean_from, headers=msg)
+                biz_name = (matched_lead.get("business_name") if matched_lead else "") or (contacted_emails.get(matched_email, {}).get("business_name", ""))
+
+                action_taken = ""
+                if category == "unsubscribe":
+                    if not dry_run:
+                        mark_lead_state(matched_email, "unsubscribed", reason=cat_reason, log_filepath=log_filepath, lead_files=lead_files)
+                    results["unsubscribes"] += 1
+                    action_taken = "Suppressed (unsubscribed across all lead lists)" if not dry_run else "[DRY-RUN] Would suppress (unsubscribe across all lead lists)"
+                elif category == "bounce_notice":
+                    if not dry_run:
+                        mark_lead_state(matched_email, "bounced", reason=cat_reason, log_filepath=log_filepath, lead_files=lead_files)
+                    results["bounces"] += 1
+                    action_taken = "Marked bounced (follow-ups cancelled)" if not dry_run else "[DRY-RUN] Would mark bounced (cancel follow-ups)"
+                elif category == "auto_reply":
+                    results["auto_replies"] += 1
+                    action_taken = "Ignored (auto-responder / OOO - not a genuine reply)"
+                else:
+                    if not dry_run:
+                        mark_lead_state(matched_email, "replied", reason=f"{category}: {cat_reason}", log_filepath=log_filepath, lead_files=lead_files)
+                    results[category] = results.get(category, 0) + 1
+                    action_taken = f"Marked replied ({category}) - manual review needed" if not dry_run else f"[DRY-RUN] Would mark replied ({category}) - manual review needed"
+
+                if not dry_run:
+                    append_outreach_log({
+                        "timestamp": get_ist_now().isoformat(),
+                        "recipient_email": matched_email,
+                        "business_name": biz_name,
+                        "segment": (matched_lead.get("segment") if matched_lead else "") or (contacted_emails.get(matched_email, {}).get("segment", "")),
+                        "email_type": f"inbox_sync:{category}",
+                        "subject": subject[:80],
+                        "status": "unsubscribed" if category == "unsubscribe" else ("bounced" if category == "bounce_notice" else ("auto_reply" if category == "auto_reply" else "replied")),
+                        "error_message": cat_reason,
+                        "message_id": msg_id,
+                        "original_subject": subject[:80],
+                    }, filepath=log_filepath)
+                    if msg_id:
+                        already_synced_mids.add(msg_id)
+
+                results["items"].append({
+                    "email": mask_email(matched_email),
+                    "business_name": biz_name,
+                    "category": category,
+                    "reason": cat_reason,
+                    "action": action_taken,
+                    "subject": subject,
+                    "date": date_hdr,
+                    "folder": folder_label,
+                })
 
     finally:
         if need_logout:
@@ -3437,7 +3670,7 @@ def sync_inbox(log_filepath=OUTREACH_LOG_CSV, max_messages=50, imap_conn=None):
             except Exception:
                 pass
 
-    print(f"\nSynced {results['matched_messages']} prospect message(s) (of {results['total_messages']} in INBOX):")
+    print(f"\nSynced {results['matched_messages']} prospect message(s) across folders:")
     print(f"  - Genuine replies: {results['interested'] + results['wants_info'] + results['pricing'] + results['wrong_contact'] + results['needs_review']}")
     print(f"  - Unsubscribes processed: {results['unsubscribes']}")
     print(f"  - Delivery bounces detected: {results['bounces']}")
@@ -3591,7 +3824,7 @@ def main():
     parser.add_argument("--area", type=str, default="Indiranagar", help="Area or neighborhood in Bengaluru.")
     parser.add_argument("--limit", type=int, default=10, help="Max leads to process/source.")
     parser.add_argument("--leads-file", type=str, default="leads.csv", help="Path to leads CSV file (default: leads.csv).")
-    parser.add_argument("--dry-run", action="store_true", default=True, help="Draft emails without sending (default).")
+    parser.add_argument("--dry-run", action="store_true", help="Run in simulation mode without sending emails or modifying files.")
     parser.add_argument("--preview-only", "--dry-render", action="store_true", help="Render and display all 7 segment emails without sending.")
     parser.add_argument("--send", action="store_true", help="Send emails live via Gmail SMTP.")
     parser.add_argument("--test-send", action="store_true", help="Send first draft strictly to TEST_RECIPIENTS.")
@@ -3609,11 +3842,24 @@ def main():
     parser.add_argument("--mark-bounced", type=str, help="Mark recipient email as bounced.")
     parser.add_argument("--override-reason", type=str, default="", help="Provide explicit justification to bypass circuit breaker for one run.")
     parser.add_argument("--override-circuit-breaker", action="store_true", help="Deprecated: use --override-reason '<reason>' instead.")
+    parser.add_argument("--reset-breaker", action="store_true", help="Manually reset a tripped circuit breaker. Requires --reason '<text>'.")
+    parser.add_argument("--reason", type=str, default="", help="Operational justification for manual actions.")
     parser.add_argument("--skip-location-audit", action="store_true", help="Skip location verification and city filtering (e.g. for abroad leads).")
     parser.add_argument("--report", action="store_true", help="Print outreach performance report by segment.")
 
 
     args = parser.parse_args()
+
+    if args.reset_breaker or args.command == "reset-breaker":
+        justification = (args.reason or args.override_reason).strip()
+        if not justification:
+            print("\n" + "!" * 75)
+            print("[ERROR] --reset-breaker requires a documented operational reason:")
+            print("  python outreach_pipeline.py --reset-breaker --reason \"<your reason>\"")
+            print("!" * 75 + "\n")
+            return
+        reset_circuit_breaker(justification)
+        return
 
     global LEADS_CSV
     if args.leads_file:
@@ -3685,7 +3931,8 @@ def main():
 
 
     if args.command == "sync-inbox" or args.sync_inbox or "sync-inbox" in sys.argv:
-        sync_inbox()
+        dry_run_mode = bool(args.dry_run or "--dry-run" in sys.argv)
+        sync_inbox(dry_run=dry_run_mode)
         return
 
     if args.override_circuit_breaker and not args.override_reason:

@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# local scratch and backups
+scratch/
+backups/
+
+

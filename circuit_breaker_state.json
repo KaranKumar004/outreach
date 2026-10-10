@@ -1,0 +1,8 @@
+{
+  "is_tripped": true,
+  "tripped_at": "2026-10-10T17:35:28.920758+05:30",
+  "reason": "Circuit breaker tripped: 6 unique bounces recorded across send history (6/49; limit is 3). Breaker locked until manual reset.",
+  "bounces": 6,
+  "denominator": 49,
+  "rate": 0.12244897959183673
+}

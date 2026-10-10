@@ -369,7 +369,7 @@ class TestWarmupMode:
         assert cap2 == 10
 
         cap3, _, _ = get_warmup_cap(str(log_file), target_date=date(2026, 10, 15))
-        assert cap3 == 25
+        assert cap3 == min(op.DAILY_SEND_CAP, op.HARD_DAILY_CAP_LIMIT)
 
 
 class TestDomainMatchingAndReviewFlagging:
@@ -1534,9 +1534,223 @@ class TestPhase3InboxSyncAndClassification:
         assert updated_leads[0]["status"] == "unsubscribed"
 
         # Check idempotency: run again, should skip already synced
-        res2 = op.sync_inbox(log_filepath=str(dummy_log), imap_conn=MockIMAP())
+        res2 = op.sync_inbox(log_filepath=str(dummy_log), imap_conn=MockIMAP(), lead_files=[str(dummy_leads)])
         assert res2["skipped_already_synced"] == 1
         assert res2["unsubscribes"] == 0
+
+    def test_verify_email_mailbox_live_probe_paths(self, monkeypatch):
+        """Test that verify_email_mailbox_live returns MailboxVerifyResult with correct probe_path."""
+        # 1. No MX
+        monkeypatch.setattr(op, "get_mx_hosts", lambda domain, **kwargs: [])
+        res_no_mx = op.verify_email_mailbox_live("user@nomxdomain.com")
+        assert not res_no_mx.is_valid
+        assert res_no_mx.probe_path == "no_mx"
+        # Unpacks as (is_valid, reason)
+        valid, reason = res_no_mx
+        assert not valid
+        assert "no active MX" in reason
+
+        # 2. 250 OK
+        class MockSMTP250:
+            def __init__(self, host, port, timeout=7): pass
+            def ehlo(self, name): pass
+            def mail(self, sender): pass
+            def rcpt(self, rcpt): return (250, b"OK")
+            def quit(self): pass
+            def close(self): pass
+
+        monkeypatch.setattr(op, "get_mx_hosts", lambda domain, **kwargs: ["mx.example.com"])
+        monkeypatch.setattr(op.smtplib, "SMTP", MockSMTP250)
+        res_250 = op.verify_email_mailbox_live("user@example.com")
+        assert res_250.is_valid
+        assert res_250.probe_path == "probe_250"
+
+        # 3. 550 permanent bounce
+        class MockSMTP550:
+            def __init__(self, host, port, timeout=7): pass
+            def ehlo(self, name): pass
+            def mail(self, sender): pass
+            def rcpt(self, rcpt): return (550, b"User unknown")
+            def quit(self): pass
+            def close(self): pass
+
+        monkeypatch.setattr(op.smtplib, "SMTP", MockSMTP550)
+        res_550 = op.verify_email_mailbox_live("bad@example.com")
+        assert not res_550.is_valid
+        assert res_550.probe_path == "probe_5xx"
+
+        # 4. 450 / 4xx transient rejection treated as UNVERIFIED (is_valid=False)
+        class MockSMTP450:
+            def __init__(self, host, port, timeout=7): pass
+            def ehlo(self, name): pass
+            def mail(self, sender): pass
+            def rcpt(self, rcpt): return (450, b"Mailbox temporarily unavailable / greylisted")
+            def quit(self): pass
+            def close(self): pass
+
+        monkeypatch.setattr(op.smtplib, "SMTP", MockSMTP450)
+        res_450 = op.verify_email_mailbox_live("temp@example.com")
+        assert not res_450.is_valid
+        assert res_450.probe_path == "probe_4xx"
+        assert "unverified" in res_450.reason
+
+        # 5. Connection error / port 25 blocked
+        def mock_smtp_err(host, port, timeout=7):
+            raise socket.timeout("Timed out connecting to port 25")
+
+        monkeypatch.setattr(op.smtplib, "SMTP", mock_smtp_err)
+        res_err = op.verify_email_mailbox_live("err@example.com")
+        assert not res_err.is_valid
+        assert res_err.probe_path == "probe_error"
+        assert "unverified" in res_err.reason
+
+    def test_port_25_startup_warning(self, monkeypatch, capsys):
+        """Test check_port_25_reachability prints warning when port 25 is blocked."""
+        monkeypatch.setattr(op.socket, "create_connection", lambda addr, timeout=3: (_ for _ in ()).throw(OSError("Port 25 blocked")))
+        reachable = op.check_port_25_reachability(timeout=1, force=True)
+        assert not reachable
+        out = capsys.readouterr().out
+        assert "[WARNING]" in out
+        assert "port 25" in out.lower()
+
+    def test_sync_inbox_dry_run_mode(self, tmp_path, monkeypatch):
+        """Test that sync_inbox with dry_run=True classifies and prints but writes nothing."""
+        dummy_log = tmp_path / "outreach_log_dry.csv"
+        dummy_leads = tmp_path / "leads_dry.csv"
+
+        with open(dummy_log, "w", newline="", encoding="utf-8") as f:
+            f.write("timestamp,recipient_email,business_name,segment,email_type,subject,status,error_message,message_id,original_subject,probe_path\n")
+            f.write("2026-09-21T10:00:00+05:30,client@test.com,Client Clinic,clinics,initial,Subject,sent,,<initial-msg-dry>,Subject,\n")
+
+        with open(dummy_leads, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.LEADS_FIELDS)
+            writer.writeheader()
+            writer.writerow({"business_name": "Client Clinic", "segment": "clinics", "email": "client@test.com", "status": "contacted_1", "website": "https://client.com"})
+
+        raw_msg = (
+            b"From: client@test.com\r\n"
+            b"To: sender@sheetbolt.com\r\n"
+            b"Subject: Re: Subject\r\n"
+            b"In-Reply-To: <initial-msg-dry>\r\n"
+            b"Message-ID: <reply-msg-dry@test.com>\r\n"
+            b"\r\n"
+            b"Stop emailing me please.\r\n"
+        )
+
+        class MockIMAP:
+            def select(self, folder, readonly=True):
+                return "OK", [b"1"]
+            def search(self, charset, criteria):
+                return "OK", [b"1"]
+            def fetch(self, num, parts):
+                return "OK", [(b"1", raw_msg)]
+            def logout(self):
+                pass
+
+        # Run with dry_run=True
+        res = op.sync_inbox(log_filepath=str(dummy_log), imap_conn=MockIMAP(), lead_files=[str(dummy_leads)], dry_run=True)
+        assert res["matched_messages"] == 1
+        assert res["unsubscribes"] == 1
+        assert "[DRY-RUN]" in res["items"][0]["action"]
+
+        # Verify NOTHING was written to dummy_leads
+        leads = op.load_leads(str(dummy_leads))
+        assert leads[0]["status"] == "contacted_1"
+
+        # Verify NO new rows in dummy_log
+        log_rows = op.load_outreach_log(str(dummy_log))
+        assert len(log_rows) == 1
+
+    def test_circuit_breaker_evaluates_all_send_history_regardless_of_file_scope(self, tmp_path):
+        """Test that circuit breaker evaluates across all send history regardless of enabled_files."""
+        log_file = tmp_path / "outreach_log_scope.csv"
+        leads_domestic = tmp_path / "leads_domestic.csv"
+        leads_foreign = tmp_path / "leads_foreign.csv"
+
+        # Domestic leads: 5 attempts, 3 bounces
+        with open(leads_domestic, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.LEADS_FIELDS)
+            writer.writeheader()
+            for i in range(5):
+                writer.writerow({"email": f"dom{i}@test.com", "business_name": f"Dom{i}", "segment": "clinics"})
+
+        # Foreign leads: 25 attempts, 0 bounces
+        with open(leads_foreign, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.LEADS_FIELDS)
+            writer.writeheader()
+            for i in range(25):
+                writer.writerow({"email": f"foreign{i}@test.com", "business_name": f"Foreign{i}", "segment": "agencies"})
+
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            f.write("timestamp,recipient_email,business_name,segment,email_type,subject,status,error_message,message_id,original_subject,probe_path\n")
+            # Domestic: 3 bounces out of 5
+            for i in range(3):
+                f.write(f"2026-09-01T10:00:00+05:30,dom{i}@test.com,Dom{i},clinics,initial,Subj,bounced,550 error,,,\n")
+            for i in range(3, 5):
+                f.write(f"2026-09-01T10:00:00+05:30,dom{i}@test.com,Dom{i},clinics,initial,Subj,sent,,,\n")
+            # Foreign: 25 sends appended afterwards
+            for i in range(25):
+                f.write(f"2026-09-02T10:00:00+05:30,foreign{i}@test.com,Foreign{i},agencies,initial,Subj,sent,,,\n")
+
+        # Breaker evaluates all 30 sends across entire log, detects 3 bounces, and trips
+        tripped, rate, b_cnt, denom, reason = op.check_circuit_breaker(str(log_file), enabled_files=[str(leads_domestic)])
+        assert tripped
+        assert b_cnt == 3
+        assert denom == 30
+
+        tripped_global, rate_g, b_cnt_g, denom_g, _ = op.check_circuit_breaker(str(log_file), enabled_files=None)
+        assert tripped_global
+        assert b_cnt_g == 3
+        assert denom_g == 30
+
+    def test_circuit_breaker_persistent_lock_and_manual_reset(self, tmp_path):
+        """Test persistent breaker locking, absence of window rolloff, and manual reset logging."""
+        log_file = tmp_path / "outreach_log_cb.csv"
+        state_file = tmp_path / "cb_state.json"
+        reset_log = tmp_path / "cb_resets.log"
+
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            f.write("timestamp,recipient_email,business_name,segment,email_type,subject,status,error_message\n")
+            f.write("2026-10-01T10:00:00+05:30,b1@test.com,B1,clinics,initial,Subj,bounced,550\n")
+            f.write("2026-10-01T10:01:00+05:30,b2@test.com,B2,clinics,initial,Subj,bounced,550\n")
+            f.write("2026-10-01T10:02:00+05:30,b3@test.com,B3,clinics,initial,Subj,bounced,550\n")
+
+        # Initial evaluation trips breaker and saves persistent state lock
+        tripped, rate, b_cnt, denom, reason = op.check_circuit_breaker(str(log_file), state_file=str(state_file))
+        assert tripped
+        assert b_cnt == 3
+        assert state_file.exists()
+
+        # Add 100 successful sends afterwards. Must NOT self-reset or rolloff!
+        with open(log_file, "a", newline="", encoding="utf-8") as f:
+            for i in range(100):
+                f.write(f"2026-10-02T10:{i%60:02d}:00+05:30,ok{i}@test.com,Ok{i},clinics,initial,Subj,sent,\n")
+
+        tripped_after, _, _, _, reason_after = op.check_circuit_breaker(str(log_file), state_file=str(state_file))
+        assert tripped_after
+        assert "locked" in reason_after.lower()
+
+        # Attempt reset without reason raises ValueError
+        with pytest.raises(ValueError, match="operational justification is required"):
+            op.reset_circuit_breaker("", state_file=str(state_file), reset_log_file=str(reset_log))
+
+        # Reset with documented operational justification
+        reset_ok = op.reset_circuit_breaker(
+            "Cleaned list and verified SPF/DKIM with domain admin",
+            state_file=str(state_file),
+            reset_log_file=str(reset_log),
+        )
+        assert reset_ok is True
+        assert reset_log.exists()
+        log_content = reset_log.read_text(encoding="utf-8")
+        assert "Cleaned list and verified SPF/DKIM with domain admin" in log_content
+
+        # Breaker after reset ignores pre-reset entries and is healthy
+        tripped_now, _, b_now, d_now, r_now = op.check_circuit_breaker(str(log_file), state_file=str(state_file))
+        assert not tripped_now
+        assert b_now == 0
+        assert "healthy" in r_now.lower()
+
 
 
 
