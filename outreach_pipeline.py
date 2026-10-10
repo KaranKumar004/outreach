@@ -76,6 +76,7 @@ LEADS_CSV = "leads.csv"
 OUTREACH_LOG_CSV = "outreach_log.csv"
 PREVIEW_DIR = "preview_drafts"
 WEBSITE_DETAILS_CACHE = "website_details_cache.json"
+VERIFIED_EMAILS_CACHE = "verified_emails_cache.json"
 
 LEADS_FIELDS = [
     "business_name",
@@ -938,42 +939,125 @@ def check_port_25_reachability(timeout=3, force=False):
         print("!" * 75 + "\n")
     return reachable
 
-def verify_email_mailbox_live(email, timeout=7):
+_LAST_MAILBOX_PROBE_TIME = 0.0
+
+def load_verified_emails_cache(cache_file=VERIFIED_EMAILS_CACHE):
+    if not cache_file or not os.path.exists(cache_file):
+        return {}
+    try:
+        with open(cache_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+def save_verified_emails_cache(cache_data, cache_file=VERIFIED_EMAILS_CACHE):
+    if not cache_file:
+        return
+    tmp = cache_file + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(cache_data, f, indent=2)
+        os.replace(tmp, cache_file)
+    except Exception:
+        pass
+
+def verify_email_mailbox_live(email, timeout=7, cache_file=VERIFIED_EMAILS_CACHE, min_interval=5.0):
     """
     Perform a direct SMTP handshake check to determine if the recipient mailbox exists.
+    Caches results for 24h and rate-limits network probes to 1 per 5s.
     Returns MailboxVerifyResult (unpacks as (is_valid, reason)) with probe_path attribute:
-      - probe_250:   250 OK rcpt accepted (is_valid=True)
-      - probe_5xx:   5xx permanent rejection (is_valid=False)
-      - probe_4xx:   4xx transient error / greylisting treated as unverified (is_valid=False)
-      - probe_error: connection refused / timeout / port 25 blocked (is_valid=False)
-      - no_mx:       domain has no active MX records (is_valid=False)
+      - probe_250:     250 OK rcpt accepted (is_valid=True)
+      - probe_5xx:     5xx permanent rejection (is_valid=False)
+      - probe_4xx:     4xx transient error / greylisting treated as unverified (is_valid=False)
+      - probe_blocked: provider policy/reputation rejection, Spamhaus/blacklist (unverified, is_valid=False)
+      - probe_error:   connection refused / timeout / port 25 blocked (is_valid=False)
+      - no_mx:         domain has no active MX records (is_valid=False)
     """
-    # Trigger one-time port 25 reachability check
-    check_port_25_reachability(timeout=3)
+    global _LAST_MAILBOX_PROBE_TIME
 
     if not email or "@" not in email:
         return MailboxVerifyResult(False, "Invalid email format", "invalid_format")
-    domain = extract_domain(email)
+
+    clean_email = normalize_email(email)
+
+    # 1. Check 24-hour cache
+    if cache_file and os.path.exists(cache_file):
+        cache = load_verified_emails_cache(cache_file)
+        if clean_email in cache:
+            entry = cache[clean_email]
+            ts_str = entry.get("timestamp", "")
+            cached_age_ok = False
+            if ts_str:
+                try:
+                    clean_ts = ts_str.replace("Z", "+00:00")
+                    cached_dt = datetime.fromisoformat(clean_ts)
+                    if cached_dt.tzinfo is None:
+                        cached_dt = cached_dt.replace(tzinfo=timezone.utc)
+                    now_utc = datetime.now(timezone.utc)
+                    age_seconds = (now_utc - cached_dt).total_seconds()
+                    if 0 <= age_seconds < 86400:
+                        cached_age_ok = True
+                except Exception:
+                    pass
+            if cached_age_ok:
+                is_valid = bool(entry.get("is_valid", entry.get("status") == "valid"))
+                reason = entry.get("reason", f"Cached probe result ({entry.get('status', 'unknown')})")
+                probe_path = entry.get("probe_path", "cached")
+                return MailboxVerifyResult(is_valid, reason, probe_path)
+
+    # 2. Trigger one-time port 25 reachability check
+    check_port_25_reachability(timeout=3)
+
+    # 3. Domain and MX verification
+    domain = extract_domain(clean_email)
     mx_hosts = get_mx_hosts(domain, timeout=timeout)
     if not mx_hosts:
-        return MailboxVerifyResult(False, f"Domain '{domain}' has no active MX records", "no_mx")
+        res = MailboxVerifyResult(False, f"Domain '{domain}' has no active MX records", "no_mx")
+        if cache_file:
+            cache = load_verified_emails_cache(cache_file)
+            cache[clean_email] = {
+                "status": "invalid",
+                "is_valid": False,
+                "reason": res.reason,
+                "probe_path": res.probe_path,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            save_verified_emails_cache(cache, cache_file)
+        return res
+
+    # 4. Rate-limit live network probes (minimum 5s between network calls)
+    if min_interval > 0:
+        now = time.time()
+        elapsed = now - _LAST_MAILBOX_PROBE_TIME
+        if elapsed < min_interval:
+            time.sleep(min_interval - elapsed)
+        _LAST_MAILBOX_PROBE_TIME = time.time()
 
     primary_mx = mx_hosts[0]
+    res = None
     try:
         s = smtplib.SMTP(primary_mx, 25, timeout=timeout)
         try:
             s.ehlo("sheetboltanalytics.netlify.app")
             s.mail("sheetbolt.analytics@gmail.com")
-            code, msg = s.rcpt(email)
+            code, msg = s.rcpt(clean_email)
             msg_str = msg.decode("utf-8", errors="ignore") if isinstance(msg, bytes) else str(msg)
-            if code == 250:
-                return MailboxVerifyResult(True, "SMTP probe passed (250 OK: rcpt accepted)", "probe_250")
+            combined_resp = f"{code} {msg_str}".lower()
+
+            blocked_patterns = ["client host blocked", "blocked using", "blacklist", "spamhaus"]
+            is_policy_blocked = any(bp in combined_resp for bp in blocked_patterns) or ("5.7." in combined_resp) or bool(re.search(r"\b5\.7\.\d+\b", combined_resp))
+
+            if is_policy_blocked:
+                res = MailboxVerifyResult(False, f"unverified: SMTP probe blocked by provider reputation/policy ({code}: {msg_str[:60].strip()})", "probe_blocked")
+            elif code == 250:
+                res = MailboxVerifyResult(True, "SMTP probe passed (250 OK: rcpt accepted)", "probe_250")
             elif code >= 500:
-                return MailboxVerifyResult(False, f"SMTP probe rejected by server ({code}: {msg_str[:60].strip()})", "probe_5xx")
+                res = MailboxVerifyResult(False, f"SMTP probe rejected by server ({code}: {msg_str[:60].strip()})", "probe_5xx")
             elif 400 <= code < 500:
-                # 4xx transient rejection/greylisting: treat as unverified rather than valid
-                return MailboxVerifyResult(False, f"unverified: SMTP probe transient failure ({code}: {msg_str[:60].strip()})", "probe_4xx")
-            return MailboxVerifyResult(False, f"unverified: SMTP probe unexpected response ({code}: {msg_str[:60].strip()})", "probe_other")
+                res = MailboxVerifyResult(False, f"unverified: SMTP probe transient failure ({code}: {msg_str[:60].strip()})", "probe_4xx")
+            else:
+                res = MailboxVerifyResult(False, f"unverified: SMTP probe unexpected response ({code}: {msg_str[:60].strip()})", "probe_other")
         finally:
             try:
                 s.quit()
@@ -983,10 +1067,27 @@ def verify_email_mailbox_live(email, timeout=7):
                 except Exception:
                     pass
     except Exception as e:
-        # Fail closed: connection refused, port 25 blocked, timeout, or SSL required
-        # Lead goes to review rather than sent blindly
         err_msg = str(e)[:60].strip() or type(e).__name__
-        return MailboxVerifyResult(False, f"unverified: SMTP port 25 probe failed ({err_msg})", "probe_error")
+        err_lower = str(e).lower()
+        blocked_patterns = ["client host blocked", "blocked using", "blacklist", "spamhaus"]
+        if any(bp in err_lower for bp in blocked_patterns) or ("5.7." in err_lower) or bool(re.search(r"\b5\.7\.\d+\b", err_lower)):
+            res = MailboxVerifyResult(False, f"unverified: SMTP probe blocked by provider reputation/policy ({err_msg})", "probe_blocked")
+        else:
+            res = MailboxVerifyResult(False, f"unverified: SMTP port 25 probe failed ({err_msg})", "probe_error")
+
+    # 5. Cache result for 24h
+    if cache_file and res:
+        cache = load_verified_emails_cache(cache_file)
+        cache[clean_email] = {
+            "status": "valid" if res.is_valid else "invalid",
+            "is_valid": res.is_valid,
+            "reason": res.reason,
+            "probe_path": res.probe_path,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        save_verified_emails_cache(cache, cache_file)
+
+    return res
 
 
 # ----------------- DOMAIN MATCHING & REVIEW FLAGGING -----------------
@@ -3357,8 +3458,41 @@ def classify_inbound_message(subject, body, from_addr, headers=None):
     from_lower = (from_addr or "").lower()
     combined = f"{subj_lower} {body_lower}"
 
-    # 1. Bounce / NDR Notice
-    bounce_senders = ["mailer-daemon@", "postmaster@", "noreply", "no-reply", "mail-delivery-system"]
+    # 1. Auto-reply / Out of office (checked first to prevent misclassifying OOO as bounce)
+    auto_subj_patterns = [
+        "out of office", "auto-reply", "autoreply", "automatic reply",
+        "away from office", "vacation response", "on leave", "out of the office",
+        "i am currently away", "i will be out of", "away from my desk"
+    ]
+    auto_body_patterns = [
+        "out of the office", "out of office", "away from the office", "away from office",
+        "i am away", "on annual leave", "on parental leave", "on sick leave",
+        "i will be out of", "i am currently out", "back in the office"
+    ]
+    is_auto = False
+    auto_reason = ""
+    if headers:
+        auto_sub = headers.get("Auto-Submitted", "").lower() if hasattr(headers, "get") else ""
+        if auto_sub in ["auto-replied", "vacation"] or (auto_sub and auto_sub != "no" and "auto" in auto_sub):
+            is_auto = True
+            auto_reason = f"Auto-submitted header ({auto_sub})"
+        elif headers.get("X-Autoreply", "") if hasattr(headers, "get") else False:
+            is_auto = True
+            auto_reason = "X-Autoreply header present"
+
+    if not is_auto:
+        if any(p in subj_lower for p in auto_subj_patterns):
+            is_auto = True
+            auto_reason = "Out of office / automatic responder subject"
+        elif any(p in body_lower for p in auto_body_patterns):
+            is_auto = True
+            auto_reason = "Out of office / automatic responder body"
+
+    if is_auto:
+        return "auto_reply", auto_reason or "Out of office / automatic responder"
+
+    # 2. Bounce / NDR Notice
+    bounce_senders = ["mailer-daemon@", "postmaster@", "mail-delivery-system"]
     bounce_subj_patterns = [
         "delivery status notification", "failure notice", "undeliverable",
         "returned mail", "mail delivery failed", "address not found",
@@ -3367,34 +3501,21 @@ def classify_inbound_message(subject, body, from_addr, headers=None):
     if any(s in from_lower for s in bounce_senders) or any(p in subj_lower for p in bounce_subj_patterns):
         diag = extract_ndr_diagnostic(body)
         cause = classify_bounce_cause(diag, body)
+
+        # Strict DSN markers for delay:
+        # Match only on: Delivery Status Notification (Delay), Status: 4.x.x, "will keep trying", "temporary failure"
+        # Bare "delay" or "delayed" keywords removed to eliminate false positives
         is_delay = (
-            any(k in subj_lower for k in ["delay", "delayed", "warning: message delivery delayed"])
-            or any(k in body_lower for k in [
-                "delivery delay", "transient failure", "will keep trying", "trying for",
-                "delayed", "temporary problem", "action: delayed", "delivery is delayed"
-            ])
-            or "delay" in diag.lower()
+            "delivery status notification (delay)" in subj_lower
+            or "delivery status notification (delay)" in body_lower
+            or bool(re.search(r"\bstatus:\s*4\.\d+\.\d+\b", body_lower))
+            or "will keep trying" in body_lower
+            or "temporary failure" in body_lower
         )
         if is_delay:
             return "delivery_delay", f"[{cause}] {diag} (transient delay; flag for recheck after 72h)"
         else:
             return "bounce_permanent", f"[{cause}] {diag}"
-
-    # 2. Auto-reply / Out of office
-    auto_subj_patterns = [
-        "out of office", "auto-reply", "autoreply", "automatic reply",
-        "away from office", "vacation response", "on leave", "out of the office",
-        "i am currently away", "i will be out of"
-    ]
-    if headers:
-        auto_sub = headers.get("Auto-Submitted", "").lower() if hasattr(headers, "get") else ""
-        if auto_sub and auto_sub != "no":
-            return "auto_reply", f"Auto-submitted header ({auto_sub})"
-        if headers.get("X-Autoreply", "") if hasattr(headers, "get") else False:
-            return "auto_reply", "X-Autoreply header present"
-
-    if any(p in subj_lower for p in auto_subj_patterns):
-        return "auto_reply", "Out of office / automatic responder"
 
     # 3. Unsubscribe / Opt-out / Not Interested (Suppression)
     unsub_phrases = [
@@ -3881,6 +4002,90 @@ def generate_report(log_filepath=OUTREACH_LOG_CSV, lead_files=None):
 
     return report_data
 
+def recheck_delivery_delays(log_filepath=OUTREACH_LOG_CSV, max_age_hours=72.0, lead_files=None):
+    """
+    Read-only audit listing delivery delay notices older than 72h with no subsequent final result.
+    Does not send emails, change lead statuses, or contact prospects.
+    Returns list of unresolved delay records.
+    """
+    if not os.path.exists(log_filepath):
+        print(f"[RECHECK DELAYS] Log file '{log_filepath}' not found.")
+        return []
+
+    entries = load_outreach_log(log_filepath)
+    now_ist = get_ist_now()
+
+    # Track all events per recipient to detect final resolution after the delay
+    prospect_events = {}
+    delays = []
+
+    for entry in entries:
+        em = normalize_email(entry.get("recipient_email", ""))
+        if not em:
+            continue
+        ts_str = entry.get("timestamp", "")
+        dt = None
+        if ts_str:
+            try:
+                clean_ts = ts_str.replace("Z", "+00:00")
+                dt = datetime.fromisoformat(clean_ts)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=IST)
+            except Exception:
+                dt = None
+
+        if dt:
+            if em not in prospect_events:
+                prospect_events[em] = []
+            prospect_events[em].append((dt, entry.get("status", ""), entry.get("email_type", "")))
+
+            st = entry.get("status", "")
+            etype = entry.get("email_type", "")
+            if st == "delivery_delay" or etype == "inbox_sync:delivery_delay":
+                delays.append((dt, em, entry))
+
+    unresolved_delays = []
+    for delay_dt, em, delay_entry in delays:
+        age_hours = (now_ist - delay_dt).total_seconds() / 3600.0
+        if age_hours < max_age_hours:
+            continue  # Delay is more recent than 72h window
+
+        # Check for events happening AFTER this delay notice
+        events_after = [
+            (e_dt, e_st, e_type) for (e_dt, e_st, e_type) in prospect_events.get(em, [])
+            if e_dt > delay_dt
+        ]
+        has_resolution = any(
+            e_st in ["bounced", "replied", "interested", "wants_info", "pricing", "unsubscribed"]
+            or (e_st in ["sent", "contacted_1", "contacted_2"] and "inbox_sync" not in e_type)
+            for (e_dt, e_st, e_type) in events_after
+        )
+
+        if not has_resolution:
+            unresolved_delays.append({
+                "recipient_email": em,
+                "business_name": delay_entry.get("business_name", ""),
+                "timestamp": delay_entry.get("timestamp", ""),
+                "age_hours": round(age_hours, 1),
+                "error_message": delay_entry.get("error_message", ""),
+                "subject": delay_entry.get("subject", ""),
+            })
+
+    print("\n" + "=" * 78)
+    print(f"⏱️  DELIVERY DELAY AUDIT (> {int(max_age_hours)}h without final resolution)")
+    print("=" * 78)
+    if not unresolved_delays:
+        print(f"No unresolved delivery delays older than {int(max_age_hours)}h found in log.")
+    else:
+        print(f"Found {len(unresolved_delays)} delay notice(s) older than {int(max_age_hours)}h requiring operator attention:")
+        for idx, item in enumerate(unresolved_delays, 1):
+            print(f"  {idx}. {item['business_name']} ({mask_email(item['recipient_email'])})")
+            print(f"     Notice Timestamp: {item['timestamp']} ({item['age_hours']}h ago)")
+            print(f"     Diagnostic:       {item['error_message'][:70]}")
+    print("=" * 78 + "\n")
+
+    return unresolved_delays
+
 def run_preview_only():
     """Renders and displays a clean preview for all 7 business segments without sending any emails."""
     leads = load_leads()
@@ -3981,9 +4186,14 @@ def main():
     parser.add_argument("--reason", type=str, default="", help="Operational justification for manual actions.")
     parser.add_argument("--skip-location-audit", action="store_true", help="Skip location verification and city filtering (e.g. for abroad leads).")
     parser.add_argument("--report", action="store_true", help="Print outreach performance report by segment.")
+    parser.add_argument("--recheck-delays", action="store_true", help="List delivery delay notices older than 72h with no final result.")
 
 
     args = parser.parse_args()
+
+    if args.recheck_delays or args.command == "recheck-delays":
+        recheck_delivery_delays(log_filepath=OUTREACH_LOG_CSV)
+        return
 
     if args.reset_breaker or args.command == "reset-breaker":
         justification = (args.reason or args.override_reason).strip()

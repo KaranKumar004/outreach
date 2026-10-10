@@ -1988,6 +1988,247 @@ class TestPhase4bHardeningAndVerification:
         assert rep["global"]["followed_up"] == 2
 
 
+class TestPhase4cHardening:
+    """Tests for Phase 4c: probe_blocked, 24h probe caching & rate limiting, strict DSN delay markers, OOO, and recheck-delays."""
+
+    def test_mailbox_probe_blocked_policy_responses(self, monkeypatch, tmp_path):
+        """Test responses with Spamhaus, blacklist, client host blocked, or 5.7.x classify as probe_blocked."""
+        cache_file = tmp_path / "probe_cache.json"
+
+        # Mock DNS MX lookup
+        monkeypatch.setattr(op, "get_mx_hosts", lambda dom, timeout=7: ["mx.target.com"])
+
+        blocked_cases = [
+            (550, b"5.7.1 Service unavailable, Client host [203.0.113.1] blocked using Spamhaus"),
+            (554, b"5.7.1 Client host blocked by recipient policy"),
+            (550, b"5.7.0 Rejected: IP address is on blacklist"),
+            (550, b"5.7.26 Message rejected due to sender reputation policy"),
+        ]
+
+        for code, msg_bytes in blocked_cases:
+            class MockSMTPBlocked:
+                def __init__(self, host, port, timeout=7):
+                    pass
+                def ehlo(self, name):
+                    pass
+                def mail(self, sender):
+                    pass
+                def rcpt(self, recipient):
+                    return code, msg_bytes
+                def quit(self):
+                    pass
+                def close(self):
+                    pass
+
+            monkeypatch.setattr(op.smtplib, "SMTP", MockSMTPBlocked)
+            res = op.verify_email_mailbox_live(f"user_{code}_{len(msg_bytes)}@target.com", cache_file=str(cache_file), min_interval=0)
+            assert not res.is_valid, "probe_blocked must be unverified (is_valid=False) to prevent live sends"
+            assert res.probe_path == "probe_blocked"
+            assert "unverified" in res.reason
+            assert "blocked" in res.reason.lower()
+
+    def test_mailbox_probe_caching_24h(self, monkeypatch, tmp_path):
+        """Test probe results are cached for 24h and avoid redundant network/SMTP calls."""
+        cache_file = tmp_path / "probe_cache.json"
+        monkeypatch.setattr(op, "get_mx_hosts", lambda dom, timeout=7: ["mx.target.com"])
+
+        probe_call_count = 0
+
+        class MockSMTPCounting:
+            def __init__(self, host, port, timeout=7):
+                nonlocal probe_call_count
+                probe_call_count += 1
+            def ehlo(self, name):
+                pass
+            def mail(self, sender):
+                pass
+            def rcpt(self, recipient):
+                return 250, b"2.1.5 Recipient OK"
+            def quit(self):
+                pass
+            def close(self):
+                pass
+
+        monkeypatch.setattr(op.smtplib, "SMTP", MockSMTPCounting)
+
+        # 1st call: cache miss -> network call
+        res1 = op.verify_email_mailbox_live("cached_user@target.com", cache_file=str(cache_file), min_interval=0)
+        assert res1.is_valid
+        assert res1.probe_path == "probe_250"
+        assert probe_call_count == 1
+
+        # 2nd call: cache hit within 24h -> no SMTP call
+        res2 = op.verify_email_mailbox_live("cached_user@target.com", cache_file=str(cache_file), min_interval=0)
+        assert res2.is_valid
+        assert probe_call_count == 1, "Cached result should not trigger SMTP probe"
+
+        # 3rd call: expired cache entry (>24h) -> triggers fresh probe
+        cache_data = op.load_verified_emails_cache(str(cache_file))
+        old_time = (op.datetime.now(op.timezone.utc) - op.timedelta(hours=25)).isoformat()
+        cache_data["cached_user@target.com"]["timestamp"] = old_time
+        op.save_verified_emails_cache(cache_data, str(cache_file))
+
+        res3 = op.verify_email_mailbox_live("cached_user@target.com", cache_file=str(cache_file), min_interval=0)
+        assert res3.is_valid
+        assert probe_call_count == 2, "Expired cache entry should trigger fresh probe"
+
+    def test_mailbox_probe_rate_limiting(self, monkeypatch, tmp_path):
+        """Test probes enforce minimum interval between live network requests."""
+        cache_file = tmp_path / "probe_cache.json"
+        monkeypatch.setattr(op, "get_mx_hosts", lambda dom, timeout=7: ["mx.target.com"])
+
+        class MockSMTPSimple:
+            def __init__(self, host, port, timeout=7):
+                pass
+            def ehlo(self, name):
+                pass
+            def mail(self, sender):
+                pass
+            def rcpt(self, recipient):
+                return 250, b"Recipient OK"
+            def quit(self):
+                pass
+            def close(self):
+                pass
+
+        monkeypatch.setattr(op.smtplib, "SMTP", MockSMTPSimple)
+
+        sleep_calls = []
+        monkeypatch.setattr(op.time, "sleep", lambda secs: sleep_calls.append(secs))
+
+        # Set last probe time to 1 second ago
+        op._LAST_MAILBOX_PROBE_TIME = op.time.time() - 1.0
+        op.verify_email_mailbox_live("user1@target.com", cache_file=str(cache_file), min_interval=5.0)
+
+        assert len(sleep_calls) == 1
+        assert 3.5 <= sleep_calls[0] <= 4.1
+
+    def test_delivery_delay_strict_dsn_markers(self):
+        """Test delivery_delay matches only strict DSN markers and rejects bare 'delayed' text."""
+        # 1. DSN marker in subject
+        cat1, _ = op.classify_inbound_message(
+            subject="Delivery Status Notification (Delay)",
+            body="Message delivery has encountered a temporary problem.",
+            from_addr="mailer-daemon@googlemail.com"
+        )
+        assert cat1 == "delivery_delay"
+
+        # 2. Status: 4.x.x marker
+        cat2, _ = op.classify_inbound_message(
+            subject="Mail Delivery Problem",
+            body="Action: failed\r\nStatus: 4.4.7 (delivery expired)",
+            from_addr="mailer-daemon@mail.server.net"
+        )
+        assert cat2 == "delivery_delay"
+
+        # 3. 'will keep trying' marker
+        cat3, _ = op.classify_inbound_message(
+            subject="Delivery problem",
+            body="The server will keep trying to deliver your message for another 48 hours.",
+            from_addr="postmaster@outbound.net"
+        )
+        assert cat3 == "delivery_delay"
+
+        # 4. 'temporary failure' marker
+        cat4, _ = op.classify_inbound_message(
+            subject="Delivery report",
+            body="Encountered temporary failure connecting to recipient MTA.",
+            from_addr="mailer-daemon@mta.com"
+        )
+        assert cat4 == "delivery_delay"
+
+        # 5. Bare 'delayed' in normal email must NOT classify as delivery_delay
+        cat5, _ = op.classify_inbound_message(
+            subject="Re: Dashboard Proposal",
+            body="Sorry my reply was delayed. We are interested, what are your fees?",
+            from_addr="ceo@prospectclinic.com"
+        )
+        assert cat5 != "delivery_delay"
+        assert cat5 in ["interested", "pricing"]
+
+    def test_out_of_office_classified_as_auto_reply(self):
+        """Test out of office text always classifies as auto_reply even from noreply senders."""
+        # OOO in subject
+        cat1, _ = op.classify_inbound_message(
+            subject="Automatic reply: Out of office until next week",
+            body="I am away from my desk on annual leave. Contact support@company.com.",
+            from_addr="noreply@company.com"
+        )
+        assert cat1 == "auto_reply"
+
+        # OOO in body
+        cat2, _ = op.classify_inbound_message(
+            subject="Re: Quick question",
+            body="Thank you for your message. I am currently out of the office with limited access to email.",
+            from_addr="doctor@clinic.in"
+        )
+        assert cat2 == "auto_reply"
+
+    def test_recheck_delays_command(self, tmp_path):
+        """Test recheck_delivery_delays lists delay notices older than 72h with no subsequent resolution."""
+        log_file = tmp_path / "outreach_log_delays.csv"
+        now_dt = op.get_ist_now()
+
+        old_unresolved_time = (now_dt - op.timedelta(hours=85)).isoformat()
+        old_resolved_time = (now_dt - op.timedelta(hours=80)).isoformat()
+        resolved_after_time = (now_dt - op.timedelta(hours=60)).isoformat()
+        recent_time = (now_dt - op.timedelta(hours=20)).isoformat()
+
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.OUTREACH_LOG_FIELDS)
+            writer.writeheader()
+            # 1. Delay notice older than 72h with no subsequent event -> should be listed
+            writer.writerow({
+                "timestamp": old_unresolved_time,
+                "recipient_email": "pending_delay@test.com",
+                "business_name": "Pending Clinic",
+                "segment": "clinics",
+                "email_type": "inbox_sync:delivery_delay",
+                "subject": "Delivery Status Notification (Delay)",
+                "status": "delivery_delay",
+                "error_message": "[other] transient failure: 4.4.1",
+            })
+            # 2. Delay notice older than 72h with subsequent resolution (bounced) -> should be excluded
+            writer.writerow({
+                "timestamp": old_resolved_time,
+                "recipient_email": "resolved_delay@test.com",
+                "business_name": "Resolved Agency",
+                "segment": "agencies",
+                "email_type": "inbox_sync:delivery_delay",
+                "subject": "Delivery Status Notification (Delay)",
+                "status": "delivery_delay",
+                "error_message": "[other] transient failure: 4.4.1",
+            })
+            writer.writerow({
+                "timestamp": resolved_after_time,
+                "recipient_email": "resolved_delay@test.com",
+                "business_name": "Resolved Agency",
+                "segment": "agencies",
+                "email_type": "inbox_sync:bounce_permanent",
+                "subject": "Undeliverable Mail",
+                "status": "bounced",
+                "error_message": "[invalid mailbox] 550 5.1.1 user unknown",
+            })
+            # 3. Delay notice younger than 72h (< 72h) -> should be excluded
+            writer.writerow({
+                "timestamp": recent_time,
+                "recipient_email": "recent_delay@test.com",
+                "business_name": "Recent Clinic",
+                "segment": "clinics",
+                "email_type": "inbox_sync:delivery_delay",
+                "subject": "Delivery Status Notification (Delay)",
+                "status": "delivery_delay",
+                "error_message": "[other] will keep trying",
+            })
+
+        unresolved = op.recheck_delivery_delays(log_filepath=str(log_file), max_age_hours=72.0)
+        assert len(unresolved) == 1
+        assert unresolved[0]["recipient_email"] == "pending_delay@test.com"
+        assert unresolved[0]["business_name"] == "Pending Clinic"
+        assert unresolved[0]["age_hours"] >= 72.0
+
+
+
 
 
 
