@@ -48,10 +48,17 @@ __pycache__/
 # local scratch and backups
 scratch/
 backups/
-circuit_breaker_state.json
-circuit_breaker_resets.log
-manual_outreach.csv
+circuit_breaker_*.json
+circuit_breaker_*.log
+manual_outreach*.csv
 verified_emails_cache.json
+website_details_cache.json
+sent_log.json
+preview_drafts/
+dentists_austin_sample.csv
+email_assets/
+leads*.csv
+outreach_log*.csv
 
 
 

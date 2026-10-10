@@ -2359,16 +2359,25 @@ class TestPhase4dHousekeeping:
                 "why_it_fits": "SEO agency",
             })
 
-        # Update Alpha Clinic
+        # Update Alpha Clinic with valid status
         ok = op.update_manual_lead(
             email="alpha@clinic.com",
             channel="whatsapp",
-            status="demo_scheduled",
+            status="call_booked",
             phone="+919876543210",
             note="Spoke with Dr. Sharma",
             manual_filepath=str(manual_file)
         )
         assert ok
+
+        # Reject invalid status
+        bad_ok = op.update_manual_lead(
+            email="alpha@clinic.com",
+            channel="whatsapp",
+            status="random_bad_status",
+            manual_filepath=str(manual_file)
+        )
+        assert not bad_ok
 
         with open(manual_file, "r", encoding="utf-8") as f:
             rows = list(op.csv.DictReader(f))
@@ -2377,7 +2386,8 @@ class TestPhase4dHousekeeping:
         assert row_alpha["channel"] == "whatsapp"
         assert row_alpha["phone"] == "+919876543210"
         assert row_alpha["whatsapp"] == "+919876543210"
-        assert row_alpha["manual_status"] == "demo_scheduled (Spoke with Dr. Sharma)"
+        assert row_alpha["manual_status"] == "call_booked"
+        assert row_alpha["note"] == "Spoke with Dr. Sharma"
         assert row_alpha["why_it_fits"] == "Dental care"
 
         # Ensure Beta Agency is untouched
@@ -2385,6 +2395,207 @@ class TestPhase4dHousekeeping:
         assert row_beta["phone"] == "99999"
         assert row_beta["channel"] == ""
         assert row_beta["manual_status"] == ""
+
+
+class TestPhase4eManualOutreach:
+    """Tests for Phase 4e: manual-add duplicate checks, manual_status whitelist, and manual-report."""
+
+    def test_manual_status_whitelist_validation(self, tmp_path):
+        """Test that manual_status strictly enforces the 10 allowed values and --note writes only to note."""
+        manual_file = tmp_path / "manual_outreach.csv"
+        with open(manual_file, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.MANUAL_OUTREACH_FIELDS)
+            writer.writeheader()
+            writer.writerow({
+                "business_name": "Test Biz",
+                "segment_guess": "agencies",
+                "email": "test@biz.com",
+                "channel": "",
+                "manual_status": "new",
+                "note": "",
+            })
+
+        for valid_st in op.VALID_MANUAL_STATUSES:
+            res = op.update_manual_lead(
+                email="test@biz.com",
+                channel="email",
+                status=valid_st,
+                note=f"Note for {valid_st}",
+                manual_filepath=str(manual_file)
+            )
+            assert res
+            with open(manual_file, "r", encoding="utf-8") as f:
+                row = next(r for r in op.csv.DictReader(f) if r["email"] == "test@biz.com")
+            assert row["manual_status"] == valid_st
+            assert row["note"] == f"Note for {valid_st}"
+
+        # Test rejected statuses
+        for invalid_st in ["in_progress", "unknown", "flagged", "closed_won"]:
+            res = op.update_manual_lead(
+                email="test@biz.com",
+                channel="email",
+                status=invalid_st,
+                manual_filepath=str(manual_file)
+            )
+            assert not res
+
+    def test_manual_add_duplicate_and_dnc_rejection(self, tmp_path):
+        """Test manual-add duplicate checks against outreach_log, leads*.csv, and DNC suppression lists."""
+        manual_file = tmp_path / "manual_outreach.csv"
+        log_file = tmp_path / "outreach_log.csv"
+        lead_file = tmp_path / "leads_custom.csv"
+
+        # Create log file with existing send and opt-out
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.OUTREACH_LOG_FIELDS)
+            writer.writeheader()
+            writer.writerow({
+                "timestamp": "2026-10-01T10:00:00+05:30",
+                "recipient_email": "logged@client.com",
+                "email_type": "initial",
+                "status": "sent",
+            })
+            writer.writerow({
+                "timestamp": "2026-10-02T10:00:00+05:30",
+                "recipient_email": "optout@client.com",
+                "email_type": "inbox_sync:unsubscribe",
+                "status": "unsubscribed",
+            })
+
+        # Create leads file with existing lead
+        with open(lead_file, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.LEADS_FIELDS)
+            writer.writeheader()
+            writer.writerow({
+                "business_name": "Custom Lead",
+                "segment": "clinics",
+                "website": "https://leadexists.com",
+                "email": "lead@leadexists.com",
+                "status": "contacted_1",
+            })
+
+        # 1. Success case: new unique lead
+        ok = op.add_manual_lead(
+            business="Fresh Dental Care",
+            segment="clinics",
+            website="https://freshdentalblr.com",
+            phone="+91 98888 77777",
+            whatsapp="+91 98888 77777",
+            email="info@freshdentalblr.com",
+            source="manual_referral",
+            manual_filepath=str(manual_file),
+            log_filepath=str(log_file),
+            leads_files=[str(lead_file)]
+        )
+        assert ok
+
+        with open(manual_file, "r", encoding="utf-8") as f:
+            rows = list(op.csv.DictReader(f))
+        assert len(rows) == 1
+        r = rows[0]
+        assert r["business_name"] == "Fresh Dental Care"
+        assert r["segment_guess"] == "clinics"
+        assert r["email"] == "info@freshdentalblr.com"
+        assert r["phone"] == "+919888877777"
+        assert r["whatsapp"] == "+919888877777"
+        assert r["already_emailed"] == "no"
+        assert r["bounced"] == "no"
+        assert r["manual_status"] == "new"
+
+        # 2. Reject duplicate email in outreach_log
+        rej1 = op.add_manual_lead(
+            business="Duplicate Email",
+            segment="clinics",
+            website="https://otherdomain.com",
+            email="logged@client.com",
+            manual_filepath=str(manual_file),
+            log_filepath=str(log_file),
+            leads_files=[str(lead_file)]
+        )
+        assert not rej1
+
+        # 3. Reject duplicate domain in leads file
+        rej2 = op.add_manual_lead(
+            business="Duplicate Domain",
+            segment="clinics",
+            website="https://leadexists.com/contact",
+            email="newemail@leadexists.com",
+            manual_filepath=str(manual_file),
+            log_filepath=str(log_file),
+            leads_files=[str(lead_file)]
+        )
+        assert not rej2
+
+        # 4. Reject DNC opt-out email
+        rej3 = op.add_manual_lead(
+            business="Suppressed Lead",
+            segment="gyms",
+            website="https://optout.com",
+            email="optout@client.com",
+            manual_filepath=str(manual_file),
+            log_filepath=str(log_file),
+            leads_files=[str(lead_file)]
+        )
+        assert not rej3
+
+        # 5. Reject duplicate in manual_outreach.csv itself
+        rej4 = op.add_manual_lead(
+            business="Fresh Dental Again",
+            segment="clinics",
+            website="https://freshdentalblr.com",
+            manual_filepath=str(manual_file),
+            log_filepath=str(log_file),
+            leads_files=[str(lead_file)]
+        )
+        assert not rej4
+
+    def test_manual_report_counts(self, tmp_path, capsys):
+        """Test generate_manual_report tallies statuses, segments, channels and contacts without printing addresses."""
+        manual_file = tmp_path / "manual_outreach.csv"
+        with open(manual_file, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.MANUAL_OUTREACH_FIELDS)
+            writer.writeheader()
+            writer.writerow({
+                "business_name": "Biz 1",
+                "segment_guess": "agencies",
+                "email": "biz1@test.com",
+                "phone": "+919999999999",
+                "channel": "whatsapp",
+                "manual_status": "contacted",
+            })
+            writer.writerow({
+                "business_name": "Biz 2",
+                "segment_guess": "clinics",
+                "email": "biz2@test.com",
+                "phone": "",
+                "channel": "call",
+                "manual_status": "call_booked",
+            })
+            writer.writerow({
+                "business_name": "Biz 3",
+                "segment_guess": "clinics",
+                "email": "biz3@test.com",
+                "phone": "",
+                "channel": "",
+                "manual_status": "new",
+            })
+
+        rep = op.generate_manual_report(manual_filepath=str(manual_file))
+        assert rep["total"] == 3
+        assert rep["by_status"]["contacted"] == 1
+        assert rep["by_status"]["call_booked"] == 1
+        assert rep["by_status"]["new"] == 1
+        assert rep["by_segment"]["clinics"] == 2
+        assert rep["by_segment"]["agencies"] == 1
+        assert rep["by_channel"]["whatsapp"] == 1
+        assert rep["by_channel"]["call"] == 1
+        assert rep["with_phone_or_whatsapp"] == 1
+
+        out = capsys.readouterr().out
+        assert "biz1@test.com" not in out
+        assert "+919999999999" not in out
+        assert "Total Prospects: 3" in out
+
 
 
 

@@ -24,6 +24,7 @@ import os
 import sys
 import re
 import csv
+import glob
 import time
 import json
 import random
@@ -107,12 +108,26 @@ MANUAL_OUTREACH_FIELDS = [
     "whatsapp",
     "channel",
     "manual_status",
+    "note",
     "source_file",
     "current_status",
     "why_it_fits",
     "already_emailed",
     "bounced",
     "last_contacted",
+]
+
+VALID_MANUAL_STATUSES = [
+    "new",
+    "contacted",
+    "replied",
+    "sample_requested",
+    "call_booked",
+    "proposal_sent",
+    "won",
+    "lost",
+    "no_response",
+    "do_not_contact",
 ]
 
 OUTREACH_LOG_FIELDS = [
@@ -4188,9 +4203,16 @@ def update_manual_outreach_joined_fields(manual_filepath=MANUAL_OUTREACH_CSV, lo
 
     return total, already_emailed_cnt, bounced_cnt, never_contacted_cnt
 
+def normalize_phone(phone_str):
+    if not phone_str:
+        return ""
+    return re.sub(r"[^\d+]", "", str(phone_str).strip())
+
 def update_manual_lead(email, channel, status, phone=None, note=None, manual_filepath=MANUAL_OUTREACH_CSV):
     """
-    Updates only phone, whatsapp, channel and manual_status for the given lead in manual_outreach.csv.
+    Updates only phone, whatsapp, channel, manual_status, and note for the given lead in manual_outreach.csv.
+    Validates manual_status against VALID_MANUAL_STATUSES.
+    --note writes strictly to the 'note' column.
     Sends nothing and modifies no other file.
     """
     clean_email = normalize_email(email)
@@ -4202,6 +4224,10 @@ def update_manual_lead(email, channel, status, phone=None, note=None, manual_fil
         print(f"[ERROR] Invalid channel '{channel}'. Allowed channels: email, whatsapp, call, in-person.")
         return False
 
+    if status not in VALID_MANUAL_STATUSES:
+        print(f"[ERROR] Invalid status '{status}'. Must be one of: {', '.join(VALID_MANUAL_STATUSES)}.")
+        return False
+
     if not os.path.exists(manual_filepath):
         print(f"[ERROR] File '{manual_filepath}' not found.")
         return False
@@ -4210,20 +4236,19 @@ def update_manual_lead(email, channel, status, phone=None, note=None, manual_fil
         reader = list(csv.DictReader(f))
 
     found = False
-    manual_st = status
-    if note:
-        manual_st = f"{status} ({note})"
-
     for row in reader:
         if normalize_email(row.get("email", "")) == clean_email:
             found = True
             row["channel"] = channel
-            row["manual_status"] = manual_st
+            row["manual_status"] = status
+            if note is not None:
+                row["note"] = note
 
             if phone:
-                row["phone"] = phone
+                clean_phone = normalize_phone(phone)
+                row["phone"] = clean_phone
                 if channel == "whatsapp":
-                    row["whatsapp"] = phone
+                    row["whatsapp"] = clean_phone
             elif channel == "whatsapp" and row.get("phone") and not row.get("whatsapp"):
                 row["whatsapp"] = row["phone"]
             break
@@ -4241,10 +4266,224 @@ def update_manual_lead(email, channel, status, phone=None, note=None, manual_fil
 
     print(f"[OK] Successfully updated lead ({mask_email(clean_email)}) in {manual_filepath}:")
     print(f"     Channel:       {channel}")
-    print(f"     Manual Status: {manual_st}")
+    print(f"     Manual Status: {status}")
+    if note is not None:
+        print(f"     Note:          {note}")
     if phone:
         print(f"     Phone:         {phone}")
     return True
+
+def add_manual_lead(business, segment, website, phone="", whatsapp="", email="", source="", manual_filepath=MANUAL_OUTREACH_CSV, log_filepath=OUTREACH_LOG_CSV, leads_files=None):
+    """
+    Manually add a single prospect to manual_outreach.csv.
+    Rejects if email or website domain already exists in outreach_log.csv, any leads*.csv,
+    or the do-not-contact suppression set (printing which one triggered rejection).
+    Appends a new row with already_emailed='no', bounced='no', manual_status='new'.
+    Never invents fields. Atomic write; modifies no other file.
+    """
+    if not business or not business.strip():
+        print("[ERROR] --business name is required.")
+        return False
+
+    valid_segments = ["agencies", "clinics", "gyms"]
+    if segment not in valid_segments:
+        print(f"[ERROR] Invalid segment '{segment}'. Must be one of: {', '.join(valid_segments)}.")
+        return False
+
+    if not website or not website.strip():
+        print("[ERROR] --website URL is required.")
+        return False
+
+    clean_email = normalize_email(email) if email else ""
+    clean_phone = normalize_phone(phone)
+    clean_wa = normalize_phone(whatsapp)
+    dom = extract_domain(website)
+    source_val = (source or "manual_entry").strip()
+
+    if leads_files is None:
+        leads_files = sorted(glob.glob("leads*.csv"))
+
+    # 1. Gather do-not-contact set across all logs and leads
+    dnc_emails = set()
+    dnc_domains = set()
+
+    # Load outreach_log
+    log_emails = set()
+    log_domains = set()
+    if os.path.exists(log_filepath):
+        for entry in load_outreach_log(log_filepath):
+            e_em = normalize_email(entry.get("recipient_email", ""))
+            e_st = entry.get("status", "")
+            if e_em:
+                log_emails.add(e_em)
+                e_dom = extract_domain(e_em)
+                if e_dom:
+                    log_domains.add(e_dom)
+                if e_st in ["unsubscribed", "do_not_contact"]:
+                    dnc_emails.add(e_em)
+                    if e_dom:
+                        dnc_domains.add(e_dom)
+
+    # Load leads*.csv
+    lead_file_emails = {}
+    lead_file_domains = {}
+    for lf in leads_files:
+        if os.path.exists(lf):
+            for row in load_leads(lf):
+                l_em = normalize_email(row.get("email", ""))
+                l_dom = extract_domain(row.get("website", "")) or (extract_domain(l_em) if l_em else "")
+                l_st = row.get("status", "")
+                if l_em:
+                    if l_em not in lead_file_emails:
+                        lead_file_emails[l_em] = lf
+                    if l_st in ["unsubscribed", "do_not_contact"]:
+                        dnc_emails.add(l_em)
+                if l_dom:
+                    if l_dom not in lead_file_domains:
+                        lead_file_domains[l_dom] = lf
+                    if l_st in ["unsubscribed", "do_not_contact"]:
+                        dnc_domains.add(l_dom)
+
+    # Load existing manual_outreach.csv if exists
+    existing_rows = []
+    if os.path.exists(manual_filepath):
+        with open(manual_filepath, "r", encoding="utf-8") as f:
+            existing_rows = list(csv.DictReader(f))
+        for r in existing_rows:
+            m_em = normalize_email(r.get("email", ""))
+            m_dom = extract_domain(r.get("website", "")) or (extract_domain(m_em) if m_em else "")
+            m_st = r.get("manual_status", "")
+            if m_st == "do_not_contact":
+                if m_em:
+                    dnc_emails.add(m_em)
+                if m_dom:
+                    dnc_domains.add(m_dom)
+
+    # Duplicate & DNC validation: print which one
+    if clean_email and clean_email in dnc_emails:
+        print(f"[ERROR] Rejected: email '{mask_email(clean_email)}' is in the do-not-contact suppression list.")
+        return False
+    if dom and dom in dnc_domains:
+        print(f"[ERROR] Rejected: website domain '{dom}' is in the do-not-contact suppression list.")
+        return False
+
+    if clean_email and clean_email in log_emails:
+        print(f"[ERROR] Rejected: email '{mask_email(clean_email)}' already exists in {os.path.basename(log_filepath)}.")
+        return False
+    if dom and dom in log_domains:
+        print(f"[ERROR] Rejected: website domain '{dom}' already exists in {os.path.basename(log_filepath)}.")
+        return False
+
+    if clean_email and clean_email in lead_file_emails:
+        src = os.path.basename(lead_file_emails[clean_email])
+        print(f"[ERROR] Rejected: email '{mask_email(clean_email)}' already exists in {src}.")
+        return False
+    if dom and dom in lead_file_domains:
+        src = os.path.basename(lead_file_domains[dom])
+        print(f"[ERROR] Rejected: website domain '{dom}' already exists in {src}.")
+        return False
+
+    for r in existing_rows:
+        if clean_email and normalize_email(r.get("email", "")) == clean_email:
+            print(f"[ERROR] Rejected: email '{mask_email(clean_email)}' already exists in {os.path.basename(manual_filepath)}.")
+            return False
+        r_dom = extract_domain(r.get("website", ""))
+        if dom and r_dom and r_dom == dom:
+            print(f"[ERROR] Rejected: website domain '{dom}' already exists in {os.path.basename(manual_filepath)}.")
+            return False
+
+    # Create new row adhering strictly to MANUAL_OUTREACH_FIELDS
+    new_row = {
+        "business_name": business.strip(),
+        "segment_guess": segment,
+        "website": website.strip(),
+        "website_detail": "",
+        "email": clean_email,
+        "phone": clean_phone,
+        "whatsapp": clean_wa,
+        "channel": "",
+        "manual_status": "new",
+        "note": "",
+        "source_file": source_val,
+        "current_status": "new",
+        "why_it_fits": f"Manual outreach candidate ({segment})",
+        "already_emailed": "no",
+        "bounced": "no",
+        "last_contacted": "",
+    }
+    existing_rows.append(new_row)
+
+    # Atomic rewrite
+    tmp_path = manual_filepath + ".tmp"
+    with open(tmp_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=MANUAL_OUTREACH_FIELDS)
+        writer.writeheader()
+        writer.writerows(existing_rows)
+    os.replace(tmp_path, manual_filepath)
+
+    print(f"[OK] Successfully added prospect '{business.strip()}' to {manual_filepath}:")
+    print(f"     Segment:         {segment}")
+    print(f"     Website:         {website.strip()}")
+    if clean_email:
+        print(f"     Email:           {mask_email(clean_email)}")
+    if clean_phone:
+        print(f"     Phone:           {clean_phone}")
+    if clean_wa:
+        print(f"     WhatsApp:        {clean_wa}")
+    print(f"     Manual Status:   new")
+    print(f"     Already Emailed: no")
+    return True
+
+def generate_manual_report(manual_filepath=MANUAL_OUTREACH_CSV):
+    """
+    Generate manual outreach status and pipeline counts.
+    Counts by manual_status, by segment, by channel, and phone/WhatsApp availability.
+    Prints counts only and never prints addresses or prospect contact details.
+    """
+    if not os.path.exists(manual_filepath):
+        print(f"[MANUAL REPORT] File '{manual_filepath}' not found.")
+        return {}
+
+    with open(manual_filepath, "r", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+
+    total = len(rows)
+    status_counts = Counter(r.get("manual_status") or "(unassigned)" for r in rows)
+    segment_counts = Counter(r.get("segment_guess") or "unclassified" for r in rows)
+    channel_counts = Counter(r.get("channel") or "(unassigned)" for r in rows)
+    with_contact = sum(1 for r in rows if r.get("phone") or r.get("whatsapp"))
+
+    print("\n" + "=" * 65)
+    print("MANUAL OUTREACH REPORT (manual_outreach.csv)")
+    print("=" * 65)
+    print(f"Total Prospects: {total}")
+
+    print("\nBy Manual Status:")
+    for st in VALID_MANUAL_STATUSES:
+        if st in status_counts:
+            print(f"  - {st:<18}: {status_counts[st]}")
+    if "(unassigned)" in status_counts:
+        print(f"  - {'(unassigned)':<18}: {status_counts['(unassigned)']}")
+
+    print("\nBy Segment:")
+    for seg, cnt in segment_counts.items():
+        print(f"  - {seg:<18}: {cnt}")
+
+    print("\nBy Channel:")
+    for ch, cnt in channel_counts.items():
+        print(f"  - {ch:<18}: {cnt}")
+
+    pct_contact = (with_contact / total * 100) if total else 0
+    print(f"\nPhone or WhatsApp Available: {with_contact} / {total} ({pct_contact:.1f}%)")
+    print("=" * 65 + "\n")
+
+    return {
+        "total": total,
+        "by_status": dict(status_counts),
+        "by_segment": dict(segment_counts),
+        "by_channel": dict(channel_counts),
+        "with_phone_or_whatsapp": with_contact,
+    }
 
 def run_preview_only():
     """Renders and displays a clean preview for all 7 business segments without sending any emails."""
@@ -4354,9 +4593,40 @@ def main():
     parser.add_argument("--note", type=str, help="Operational notes for manual update.")
     parser.add_argument("--manual-file", type=str, default=None, help="Path to manual outreach CSV file.")
     parser.add_argument("--sync-manual-outreach", action="store_true", help="Sync already_emailed, bounced, and last_contacted in manual_outreach.csv.")
+    parser.add_argument("--business", type=str, help="Business name for manual-add.")
+    parser.add_argument("--website", type=str, help="Website URL for manual-add.")
+    parser.add_argument("--whatsapp", type=str, help="WhatsApp number for manual-add.")
+    parser.add_argument("--source", type=str, help="Source reference for manual-add.")
+    parser.add_argument("--manual-report", action="store_true", help="Print manual outreach report.")
 
 
     args = parser.parse_args()
+
+    if args.command == "manual-add":
+        if not args.business or not args.segment or not args.website:
+            print("\n" + "!" * 75)
+            print("[ERROR] manual-add requires --business, --segment, and --website.")
+            print("Usage: python outreach_pipeline.py manual-add --business \"<name>\" --segment <agencies|clinics|gyms> --website <url> [--phone <n>] [--whatsapp <n>] [--email <addr>] [--source <text>]")
+            print("!" * 75 + "\n")
+            return
+        manual_f = args.manual_file or MANUAL_OUTREACH_CSV
+        add_manual_lead(
+            business=args.business,
+            segment=args.segment,
+            website=args.website,
+            phone=args.phone or "",
+            whatsapp=args.whatsapp or "",
+            email=args.email or "",
+            source=args.source or "",
+            manual_filepath=manual_f,
+            log_filepath=OUTREACH_LOG_CSV
+        )
+        return
+
+    if args.command == "manual-report" or args.manual_report:
+        manual_f = args.manual_file or MANUAL_OUTREACH_CSV
+        generate_manual_report(manual_filepath=manual_f)
+        return
 
     if args.command == "manual-update":
         if not args.email or not args.channel or not args.status:
