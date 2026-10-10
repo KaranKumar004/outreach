@@ -1238,7 +1238,7 @@ def print_new_retail_leads(filepath=None):
             name = r.get("business_name", "")
             domain = extract_domain(r.get("website", ""))
             email = r.get("email", "")
-            print(f"  - Name: {name:<30} | Domain: {domain:<25} | Email: {email}")
+            print(f"  - Name: {name:<30} | Domain: {domain:<25} | Email: {mask_email(email)}")
     print("=" * 65 + "\n")
 
 # ----------------- WEBSITE DETAIL EXTRACTION & CACHING -----------------
@@ -2747,7 +2747,7 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
         print("\n" + "=" * 65)
         print(f"[SEGMENT AUDIT] {len(seg_changes)} lead(s) reclassified:")
         for ch_lead, old_s, new_s, reason in seg_changes:
-            print(f"  - {ch_lead.get('business_name')} ({ch_lead.get('email')}): {old_s} -> {new_s} ({reason})")
+            print(f"  - {ch_lead.get('business_name')} ({mask_email(ch_lead.get('email', ''))}): {old_s} -> {new_s} ({reason})")
         print("=" * 65)
 
     # 3. Audit corporate chains, national brands, blocked inboxes, and domain mismatches
@@ -2756,7 +2756,7 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
         print("\n" + "=" * 65)
         print(f"[REVIEW FLAGGED AUDIT] {len(flagged_leads)} lead(s) flagged for review:")
         for fl_lead, r_reason in flagged_leads:
-            print(f"  - {fl_lead.get('business_name')} ({fl_lead.get('email')}): {r_reason}")
+            print(f"  - {fl_lead.get('business_name')} ({mask_email(fl_lead.get('email', ''))}): {r_reason}")
         print("=" * 65)
 
     # 3b. Audit mailboxes (live MX and SMTP handshake check)
@@ -2765,7 +2765,7 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
         print("\n" + "=" * 65)
         print(f"[MAILBOX AUDIT] {len(mb_flagged)} lead(s) flagged for invalid mailboxes:")
         for fl_lead, r_reason in mb_flagged:
-            print(f"  - {fl_lead.get('business_name')} ({fl_lead.get('email')}): {r_reason}")
+            print(f"  - {fl_lead.get('business_name')} ({mask_email(fl_lead.get('email', ''))}): {r_reason}")
         print("=" * 65)
 
 
@@ -2947,12 +2947,12 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
             # Pre-send live mailbox check to eliminate any bounce risk
             mb_ok, mb_reason = verify_email_mailbox_live(lead["email"])
             if not mb_ok:
-                print(f"\n[PRE-SEND VERIFICATION REJECTED] Skipping {lead['business_name']} ({lead['email']}): {mb_reason}")
+                print(f"\n[PRE-SEND VERIFICATION REJECTED] Skipping {lead['business_name']} ({mask_email(lead['email'])}): {mb_reason}")
                 lead["status"] = "review_flagged"
                 save_leads(leads, leads_filepath)
                 continue
 
-            print(f"\n[{idx}/{len(target_leads)}] Sending to {lead['business_name']} ({lead['email']})...")
+            print(f"\n[{idx}/{len(target_leads)}] Sending to {lead['business_name']} ({mask_email(lead['email'])})...")
             try:
                 final_msgid, _ = send_smtp_email(
                     lead["email"],
@@ -3050,7 +3050,7 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
         body_limit_str = "< 70 words (including greeting)" if followup_mode else "< 90 words (signature excluded)"
         print(f"\n==================== [EMAIL PREVIEW #{i+1}] ====================")
         print(f"FROM:           {from_line}")
-        print(f"TO:             {ld['email']}")
+        print(f"TO:             {mask_email(ld['email'])}")
         print(f"BUSINESS:       {ld['business_name']} ({ld['segment']})")
         print(f"GREETING:       {get_greeting(ld['business_name'])}")
         print(f"LOCATION CHECK: [PASS] {loc_info}")
