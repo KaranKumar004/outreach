@@ -2228,6 +2228,166 @@ class TestPhase4cHardening:
         assert unresolved[0]["age_hours"] >= 72.0
 
 
+class TestPhase4dHousekeeping:
+    """Tests for Phase 4d: manual-update command, join against outreach_log, and root cache isolation."""
+
+    def test_root_cache_isolation(self, tmp_path, monkeypatch):
+        """Confirm that tests never write to the real verified_emails_cache.json in the project root."""
+        root_cache = "verified_emails_cache.json"
+        initial_hash = None
+        if os.path.exists(root_cache):
+            with open(root_cache, "rb") as f:
+                initial_hash = op.hashlib.sha256(f.read()).hexdigest()
+
+        # Monkeypatch MX lookup
+        monkeypatch.setattr(op, "get_mx_hosts", lambda dom, **kwargs: ["mx.isolate.com"])
+
+        class MockSMTP:
+            def __init__(self, host, port, timeout=7): pass
+            def ehlo(self, name): pass
+            def mail(self, sender): pass
+            def rcpt(self, recipient): return 250, b"OK"
+            def quit(self): pass
+            def close(self): pass
+
+        monkeypatch.setattr(op.smtplib, "SMTP", MockSMTP)
+
+        # Call verify_email_mailbox_live with default arguments (no explicit cache_file)
+        res = op.verify_email_mailbox_live("isolation_test@isolate.com", min_interval=0)
+        assert res.is_valid
+
+        # Verify that op.VERIFIED_EMAILS_CACHE points inside tmp_path
+        assert str(tmp_path) in op.VERIFIED_EMAILS_CACHE
+
+        # Verify root_cache file hash is identical (or does not exist)
+        if initial_hash:
+            with open(root_cache, "rb") as f:
+                final_hash = op.hashlib.sha256(f.read()).hexdigest()
+            assert final_hash == initial_hash, "Real project root verified_emails_cache.json was modified!"
+
+    def test_update_manual_outreach_joined_fields(self, tmp_path):
+        """Test joining manual_outreach.csv against outreach_log.csv produces accurate counts and fields."""
+        manual_file = tmp_path / "manual_outreach.csv"
+        log_file = tmp_path / "outreach_log.csv"
+
+        with open(manual_file, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.MANUAL_OUTREACH_FIELDS)
+            writer.writeheader()
+            writer.writerow({
+                "business_name": "Emailed Clinic",
+                "segment_guess": "clinics",
+                "email": "emailed@clinic.com",
+            })
+            writer.writerow({
+                "business_name": "Bounced Agency",
+                "segment_guess": "agencies",
+                "email": "bounced@agency.com",
+            })
+            writer.writerow({
+                "business_name": "Fresh Studio",
+                "segment_guess": "clinics",
+                "email": "fresh@studio.com",
+            })
+
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.OUTREACH_LOG_FIELDS)
+            writer.writeheader()
+            writer.writerow({
+                "timestamp": "2026-10-01T10:00:00+05:30",
+                "recipient_email": "emailed@clinic.com",
+                "email_type": "initial",
+                "status": "sent",
+            })
+            writer.writerow({
+                "timestamp": "2026-10-01T10:05:00+05:30",
+                "recipient_email": "bounced@agency.com",
+                "email_type": "initial",
+                "status": "bounced",
+            })
+
+        total, emailed_cnt, bounced_cnt, fresh_cnt = op.update_manual_outreach_joined_fields(
+            manual_filepath=str(manual_file),
+            log_filepath=str(log_file)
+        )
+
+        assert total == 3
+        assert emailed_cnt == 2
+        assert bounced_cnt == 1
+        assert fresh_cnt == 1
+
+        with open(manual_file, "r", encoding="utf-8") as f:
+            rows = list(op.csv.DictReader(f))
+
+        row_map = {r["email"]: r for r in rows}
+        assert row_map["emailed@clinic.com"]["already_emailed"] == "yes"
+        assert row_map["emailed@clinic.com"]["bounced"] == "no"
+        assert row_map["emailed@clinic.com"]["last_contacted"] == "2026-10-01T10:00:00+05:30"
+
+        assert row_map["bounced@agency.com"]["already_emailed"] == "yes"
+        assert row_map["bounced@agency.com"]["bounced"] == "yes"
+        assert row_map["bounced@agency.com"]["last_contacted"] == "2026-10-01T10:05:00+05:30"
+
+        assert row_map["fresh@studio.com"]["already_emailed"] == "no"
+        assert row_map["fresh@studio.com"]["bounced"] == "no"
+        assert row_map["fresh@studio.com"]["last_contacted"] == ""
+
+    def test_update_manual_lead_command(self, tmp_path):
+        """Test update_manual_lead modifies only specified fields for targeted row."""
+        manual_file = tmp_path / "manual_outreach.csv"
+
+        with open(manual_file, "w", newline="", encoding="utf-8") as f:
+            writer = op.csv.DictWriter(f, fieldnames=op.MANUAL_OUTREACH_FIELDS)
+            writer.writeheader()
+            writer.writerow({
+                "business_name": "Alpha Clinic",
+                "segment_guess": "clinics",
+                "email": "alpha@clinic.com",
+                "phone": "",
+                "whatsapp": "",
+                "channel": "",
+                "manual_status": "",
+                "why_it_fits": "Dental care",
+            })
+            writer.writerow({
+                "business_name": "Beta Agency",
+                "segment_guess": "agencies",
+                "email": "beta@agency.com",
+                "phone": "99999",
+                "whatsapp": "",
+                "channel": "",
+                "manual_status": "",
+                "why_it_fits": "SEO agency",
+            })
+
+        # Update Alpha Clinic
+        ok = op.update_manual_lead(
+            email="alpha@clinic.com",
+            channel="whatsapp",
+            status="demo_scheduled",
+            phone="+919876543210",
+            note="Spoke with Dr. Sharma",
+            manual_filepath=str(manual_file)
+        )
+        assert ok
+
+        with open(manual_file, "r", encoding="utf-8") as f:
+            rows = list(op.csv.DictReader(f))
+
+        row_alpha = next(r for r in rows if r["email"] == "alpha@clinic.com")
+        assert row_alpha["channel"] == "whatsapp"
+        assert row_alpha["phone"] == "+919876543210"
+        assert row_alpha["whatsapp"] == "+919876543210"
+        assert row_alpha["manual_status"] == "demo_scheduled (Spoke with Dr. Sharma)"
+        assert row_alpha["why_it_fits"] == "Dental care"
+
+        # Ensure Beta Agency is untouched
+        row_beta = next(r for r in rows if r["email"] == "beta@agency.com")
+        assert row_beta["phone"] == "99999"
+        assert row_beta["channel"] == ""
+        assert row_beta["manual_status"] == ""
+
+
+
 
 
 

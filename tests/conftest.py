@@ -14,11 +14,20 @@ def calculate_sha256(filepath):
             h.update(chunk)
     return h.hexdigest()
 
+@pytest.fixture(autouse=True)
+def isolate_test_caches(tmp_path, monkeypatch):
+    """
+    Ensure every test isolates verified emails cache to a unique tmp_path
+    so real root verified_emails_cache.json is never read or written.
+    """
+    import outreach_pipeline as op
+    monkeypatch.setattr(op, "VERIFIED_EMAILS_CACHE", str(tmp_path / "test_verified_emails_cache.json"))
+
 @pytest.fixture(scope="session", autouse=True)
 def guard_project_files_integrity():
     """
     Integrity Gate:
-    1. Checksums all real project data files (outreach_log*.csv, leads*.csv).
+    1. Checksums all real project data files (outreach_log*.csv, leads*.csv, verified_emails_cache.json, manual_outreach.csv).
     2. Locks them as read-only via os.chmod(stat.S_IREAD).
     3. Yields for test execution.
     4. Restores write permissions and asserts checksums are completely unchanged.
@@ -27,6 +36,7 @@ def guard_project_files_integrity():
         set(
             glob.glob("leads*.csv")
             + glob.glob("outreach_log*.csv")
+            + [f for f in ["verified_emails_cache.json", "manual_outreach.csv"] if os.path.exists(f)]
         )
     )
 

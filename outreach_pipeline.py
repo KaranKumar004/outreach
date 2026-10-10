@@ -95,6 +95,25 @@ LEADS_FIELDS = [
 
 CIRCUIT_BREAKER_STATE_FILE = "circuit_breaker_state.json"
 RESET_BREAKER_LOG_FILE = "circuit_breaker_resets.log"
+MANUAL_OUTREACH_CSV = "manual_outreach.csv"
+
+MANUAL_OUTREACH_FIELDS = [
+    "business_name",
+    "segment_guess",
+    "website",
+    "website_detail",
+    "email",
+    "phone",
+    "whatsapp",
+    "channel",
+    "manual_status",
+    "source_file",
+    "current_status",
+    "why_it_fits",
+    "already_emailed",
+    "bounced",
+    "last_contacted",
+]
 
 OUTREACH_LOG_FIELDS = [
     "timestamp",
@@ -941,7 +960,9 @@ def check_port_25_reachability(timeout=3, force=False):
 
 _LAST_MAILBOX_PROBE_TIME = 0.0
 
-def load_verified_emails_cache(cache_file=VERIFIED_EMAILS_CACHE):
+def load_verified_emails_cache(cache_file=None):
+    if cache_file is None:
+        cache_file = VERIFIED_EMAILS_CACHE
     if not cache_file or not os.path.exists(cache_file):
         return {}
     try:
@@ -951,7 +972,9 @@ def load_verified_emails_cache(cache_file=VERIFIED_EMAILS_CACHE):
     except Exception:
         return {}
 
-def save_verified_emails_cache(cache_data, cache_file=VERIFIED_EMAILS_CACHE):
+def save_verified_emails_cache(cache_data, cache_file=None):
+    if cache_file is None:
+        cache_file = VERIFIED_EMAILS_CACHE
     if not cache_file:
         return
     tmp = cache_file + ".tmp"
@@ -962,7 +985,7 @@ def save_verified_emails_cache(cache_data, cache_file=VERIFIED_EMAILS_CACHE):
     except Exception:
         pass
 
-def verify_email_mailbox_live(email, timeout=7, cache_file=VERIFIED_EMAILS_CACHE, min_interval=5.0):
+def verify_email_mailbox_live(email, timeout=7, cache_file=None, min_interval=5.0):
     """
     Perform a direct SMTP handshake check to determine if the recipient mailbox exists.
     Caches results for 24h and rate-limits network probes to 1 per 5s.
@@ -975,6 +998,8 @@ def verify_email_mailbox_live(email, timeout=7, cache_file=VERIFIED_EMAILS_CACHE
       - no_mx:         domain has no active MX records (is_valid=False)
     """
     global _LAST_MAILBOX_PROBE_TIME
+    if cache_file is None:
+        cache_file = VERIFIED_EMAILS_CACHE
 
     if not email or "@" not in email:
         return MailboxVerifyResult(False, "Invalid email format", "invalid_format")
@@ -4086,6 +4111,141 @@ def recheck_delivery_delays(log_filepath=OUTREACH_LOG_CSV, max_age_hours=72.0, l
 
     return unresolved_delays
 
+def update_manual_outreach_joined_fields(manual_filepath=MANUAL_OUTREACH_CSV, log_filepath=OUTREACH_LOG_CSV):
+    """
+    Join manual_outreach.csv against outreach_log.csv by normalized email.
+    Adds/updates:
+      - already_emailed: 'yes' if prospect had an initial/followup send attempted, else 'no'
+      - bounced: 'yes' if prospect had a bounce recorded, else 'no'
+      - last_contacted: ISO timestamp of latest email attempt (or empty string)
+    Rewrites atomically and prints only counts: total, already emailed, bounced, never contacted.
+    """
+    if not os.path.exists(manual_filepath):
+        print(f"[MANUAL OUTREACH] File '{manual_filepath}' not found.")
+        return 0, 0, 0, 0
+
+    log_entries = load_outreach_log(log_filepath) if os.path.exists(log_filepath) else []
+    log_by_email = {}
+    for entry in log_entries:
+        em = normalize_email(entry.get("recipient_email", ""))
+        if not em:
+            continue
+        if em not in log_by_email:
+            log_by_email[em] = []
+        log_by_email[em].append(entry)
+
+    with open(manual_filepath, "r", encoding="utf-8") as f:
+        reader = list(csv.DictReader(f))
+
+    total = len(reader)
+    already_emailed_cnt = 0
+    bounced_cnt = 0
+    never_contacted_cnt = 0
+
+    updated_rows = []
+    for row in reader:
+        em = normalize_email(row.get("email", ""))
+        matches = log_by_email.get(em, [])
+        is_emailed = any(m.get("email_type") in ["initial", "followup"] for m in matches)
+        is_bounced = any(m.get("status") == "bounced" for m in matches)
+        timestamps = [m.get("timestamp", "") for m in matches if m.get("timestamp")]
+        last_ts = max(timestamps) if timestamps else ""
+
+        row["already_emailed"] = "yes" if is_emailed else "no"
+        row["bounced"] = "yes" if is_bounced else "no"
+        row["last_contacted"] = last_ts
+        if "channel" not in row:
+            row["channel"] = ""
+        if "manual_status" not in row:
+            row["manual_status"] = ""
+
+        if is_emailed:
+            already_emailed_cnt += 1
+        else:
+            never_contacted_cnt += 1
+
+        if is_bounced:
+            bounced_cnt += 1
+
+        updated_rows.append(row)
+
+    # Atomic write to manual_filepath
+    tmp_path = manual_filepath + ".tmp"
+    with open(tmp_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=MANUAL_OUTREACH_FIELDS)
+        writer.writeheader()
+        writer.writerows(updated_rows)
+    os.replace(tmp_path, manual_filepath)
+
+    print("\n" + "=" * 65)
+    print("MANUAL OUTREACH STATUS SUMMARY (manual_outreach.csv)")
+    print("=" * 65)
+    print(f"Total leads:        {total}")
+    print(f"Already emailed:    {already_emailed_cnt}")
+    print(f"Bounced:            {bounced_cnt}")
+    print(f"Never contacted:    {never_contacted_cnt}")
+    print("=" * 65 + "\n")
+
+    return total, already_emailed_cnt, bounced_cnt, never_contacted_cnt
+
+def update_manual_lead(email, channel, status, phone=None, note=None, manual_filepath=MANUAL_OUTREACH_CSV):
+    """
+    Updates only phone, whatsapp, channel and manual_status for the given lead in manual_outreach.csv.
+    Sends nothing and modifies no other file.
+    """
+    clean_email = normalize_email(email)
+    if not clean_email:
+        print("[ERROR] A valid prospect email address is required.")
+        return False
+
+    if channel not in ["email", "whatsapp", "call", "in-person"]:
+        print(f"[ERROR] Invalid channel '{channel}'. Allowed channels: email, whatsapp, call, in-person.")
+        return False
+
+    if not os.path.exists(manual_filepath):
+        print(f"[ERROR] File '{manual_filepath}' not found.")
+        return False
+
+    with open(manual_filepath, "r", encoding="utf-8") as f:
+        reader = list(csv.DictReader(f))
+
+    found = False
+    manual_st = status
+    if note:
+        manual_st = f"{status} ({note})"
+
+    for row in reader:
+        if normalize_email(row.get("email", "")) == clean_email:
+            found = True
+            row["channel"] = channel
+            row["manual_status"] = manual_st
+
+            if phone:
+                row["phone"] = phone
+                if channel == "whatsapp":
+                    row["whatsapp"] = phone
+            elif channel == "whatsapp" and row.get("phone") and not row.get("whatsapp"):
+                row["whatsapp"] = row["phone"]
+            break
+
+    if not found:
+        print(f"[ERROR] Lead with email '{mask_email(clean_email)}' not found in {manual_filepath}.")
+        return False
+
+    tmp_path = manual_filepath + ".tmp"
+    with open(tmp_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=MANUAL_OUTREACH_FIELDS)
+        writer.writeheader()
+        writer.writerows(reader)
+    os.replace(tmp_path, manual_filepath)
+
+    print(f"[OK] Successfully updated lead ({mask_email(clean_email)}) in {manual_filepath}:")
+    print(f"     Channel:       {channel}")
+    print(f"     Manual Status: {manual_st}")
+    if phone:
+        print(f"     Phone:         {phone}")
+    return True
+
 def run_preview_only():
     """Renders and displays a clean preview for all 7 business segments without sending any emails."""
     leads = load_leads()
@@ -4187,9 +4347,39 @@ def main():
     parser.add_argument("--skip-location-audit", action="store_true", help="Skip location verification and city filtering (e.g. for abroad leads).")
     parser.add_argument("--report", action="store_true", help="Print outreach performance report by segment.")
     parser.add_argument("--recheck-delays", action="store_true", help="List delivery delay notices older than 72h with no final result.")
+    parser.add_argument("--email", type=str, help="Target prospect email for manual update.")
+    parser.add_argument("--channel", type=str, choices=["email", "whatsapp", "call", "in-person"], help="Outreach channel for manual tracking.")
+    parser.add_argument("--status", type=str, help="Outreach status text for manual update.")
+    parser.add_argument("--phone", type=str, help="Phone number for manual update.")
+    parser.add_argument("--note", type=str, help="Operational notes for manual update.")
+    parser.add_argument("--manual-file", type=str, default=None, help="Path to manual outreach CSV file.")
+    parser.add_argument("--sync-manual-outreach", action="store_true", help="Sync already_emailed, bounced, and last_contacted in manual_outreach.csv.")
 
 
     args = parser.parse_args()
+
+    if args.command == "manual-update":
+        if not args.email or not args.channel or not args.status:
+            print("\n" + "!" * 75)
+            print("[ERROR] manual-update requires --email, --channel, and --status.")
+            print("Usage: python outreach_pipeline.py manual-update --email <addr> --channel <email|whatsapp|call|in-person> --status <text> [--phone <n>] [--note <text>]")
+            print("!" * 75 + "\n")
+            return
+        manual_f = args.manual_file or MANUAL_OUTREACH_CSV
+        update_manual_lead(
+            email=args.email,
+            channel=args.channel,
+            status=args.status,
+            phone=args.phone,
+            note=args.note,
+            manual_filepath=manual_f
+        )
+        return
+
+    if args.command == "sync-manual-outreach" or args.sync_manual_outreach:
+        manual_f = args.manual_file or MANUAL_OUTREACH_CSV
+        update_manual_outreach_joined_fields(manual_filepath=manual_f, log_filepath=OUTREACH_LOG_CSV)
+        return
 
     if args.recheck_delays or args.command == "recheck-delays":
         recheck_delivery_delays(log_filepath=OUTREACH_LOG_CSV)

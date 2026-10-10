@@ -50,6 +50,8 @@ scratch/
 backups/
 circuit_breaker_state.json
 circuit_breaker_resets.log
+manual_outreach.csv
+verified_emails_cache.json
 
 
 
