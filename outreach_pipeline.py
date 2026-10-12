@@ -25,6 +25,7 @@ import sys
 import re
 import csv
 import glob
+import difflib
 import time
 import json
 import random
@@ -4273,11 +4274,80 @@ def update_manual_lead(email, channel, status, phone=None, note=None, manual_fil
         print(f"     Phone:         {phone}")
     return True
 
+FREE_EMAIL_DOMAINS = {
+    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.in", "yahoo.co.uk",
+    "outlook.com", "hotmail.com", "live.com", "msn.com",
+    "icloud.com", "me.com", "mac.com",
+    "aol.com", "zoho.com", "zoho.in", "mail.com",
+    "protonmail.com", "proton.me", "ymail.com", "rediffmail.com"
+}
+
+def clean_last10_phone(phone_str):
+    """Extract digits and return the last 10 digits for phone comparison."""
+    if not phone_str:
+        return ""
+    digits = re.sub(r"\D", "", str(phone_str).strip())
+    if len(digits) >= 10:
+        return digits[-10:]
+    return ""
+
+def normalize_business_name(name):
+    """
+    Normalize business name for duplicate detection:
+    lowercase, strip punctuation, remove generic business terms/stopwords.
+    """
+    if not name:
+        return ""
+    cleaned = re.sub(r"[^a-z0-9\s]", " ", str(name).lower())
+    stopwords = {
+        "clinic", "clinics", "dental", "digital", "agency", "agencies",
+        "pvt", "ltd", "private", "limited", "the", "and", "center", "centre",
+        "studio", "solutions", "services", "care", "wellness", "health",
+        "hospital", "hospitals", "group", "dr", "doctor", "dentistry", "implants"
+    }
+    tokens = [t for t in cleaned.split() if t and t not in stopwords]
+    return " ".join(tokens)
+
+def check_business_name_similarity(name1, name2, threshold=0.8):
+    """
+    Compare two business names by normalized forms and token similarity.
+    Returns (is_similar, score).
+    """
+    n1 = normalize_business_name(name1)
+    n2 = normalize_business_name(name2)
+    if not n1 or not n2:
+        return False, 0.0
+    if n1 == n2:
+        return True, 1.0
+
+    # Substring containment for distinctive names (length >= 4)
+    if (len(n1) >= 4 and n1 in n2) or (len(n2) >= 4 and n2 in n1):
+        return True, 0.95
+
+    tokens1 = set(n1.split())
+    tokens2 = set(n2.split())
+    if tokens1 and tokens2:
+        intersection = tokens1.intersection(tokens2)
+        distinctive = [t for t in intersection if len(t) >= 4]
+        if distinctive and (len(tokens1) == 1 or len(tokens2) == 1):
+            return True, 0.9
+
+    ratio = difflib.SequenceMatcher(None, n1, n2).ratio()
+    if ratio >= threshold:
+        return True, ratio
+
+    return False, ratio
+
 def add_manual_lead(business, segment, website, phone="", whatsapp="", email="", source="", manual_filepath=MANUAL_OUTREACH_CSV, log_filepath=OUTREACH_LOG_CSV, leads_files=None):
     """
     Manually add a single prospect to manual_outreach.csv.
-    Rejects if email or website domain already exists in outreach_log.csv, any leads*.csv,
-    or the do-not-contact suppression set (printing which one triggered rejection).
+    Enforces strengthened deduplication:
+      (a) Email match (normalized)
+      (b) Phone digits match (last 10 digits)
+      (c) Website domain match against leads*.csv websites and outreach_log.csv email domains
+      (d) Normalized business name with similarity check
+    Rule 4: leads_phone_only.csv is exempted from blocking manual-add unless
+    outreach_log.csv records an actual initial or follow-up send.
     Appends a new row with already_emailed='no', bounced='no', manual_status='new'.
     Never invents fields. Atomic write; modifies no other file.
     """
@@ -4297,69 +4367,81 @@ def add_manual_lead(business, segment, website, phone="", whatsapp="", email="",
     clean_email = normalize_email(email) if email else ""
     clean_phone = normalize_phone(phone)
     clean_wa = normalize_phone(whatsapp)
+    cand_p10 = clean_last10_phone(phone) or clean_last10_phone(whatsapp)
     dom = extract_domain(website)
     source_val = (source or "manual_entry").strip()
 
     if leads_files is None:
         leads_files = sorted(glob.glob("leads*.csv"))
 
+    # Rule 4 Exemption: leads_phone_only.csv contains uncontacted leads and must not block manual-add.
+    # Only outreach_log.csv records actual initial or follow-up sends.
+    blocking_leads_files = [lf for lf in leads_files if os.path.basename(lf) != "leads_phone_only.csv"]
+
     # 1. Gather do-not-contact set across all logs and leads
     dnc_emails = set()
     dnc_domains = set()
 
-    # Load outreach_log
+    # Load outreach_log records
     log_emails = set()
-    log_domains = set()
+    log_email_domains = set()
+    log_phones = {}
+    log_businesses = []
     if os.path.exists(log_filepath):
         for entry in load_outreach_log(log_filepath):
             e_em = normalize_email(entry.get("recipient_email", ""))
             e_st = entry.get("status", "")
+            e_biz = entry.get("business_name", "").strip()
+            e_p = entry.get("phone", "")
+
             if e_em:
                 log_emails.add(e_em)
                 e_dom = extract_domain(e_em)
-                if e_dom:
-                    log_domains.add(e_dom)
+                if e_dom and e_dom not in FREE_EMAIL_DOMAINS:
+                    log_email_domains.add(e_dom)
                 if e_st in ["unsubscribed", "do_not_contact"]:
                     dnc_emails.add(e_em)
-                    if e_dom:
+                    if e_dom and e_dom not in FREE_EMAIL_DOMAINS:
                         dnc_domains.add(e_dom)
 
-    # Load leads*.csv
-    lead_file_emails = {}
-    lead_file_domains = {}
-    for lf in leads_files:
+            p10 = clean_last10_phone(e_p)
+            if p10:
+                log_phones[p10] = log_filepath
+
+            if e_biz:
+                log_businesses.append(e_biz)
+
+    # Load blocking leads*.csv files
+    lead_rows = []
+    for lf in blocking_leads_files:
         if os.path.exists(lf):
             for row in load_leads(lf):
+                lead_rows.append((lf, row))
                 l_em = normalize_email(row.get("email", ""))
                 l_dom = extract_domain(row.get("website", "")) or (extract_domain(l_em) if l_em else "")
                 l_st = row.get("status", "")
-                if l_em:
-                    if l_em not in lead_file_emails:
-                        lead_file_emails[l_em] = lf
-                    if l_st in ["unsubscribed", "do_not_contact"]:
+                if l_st in ["unsubscribed", "do_not_contact"]:
+                    if l_em:
                         dnc_emails.add(l_em)
-                if l_dom:
-                    if l_dom not in lead_file_domains:
-                        lead_file_domains[l_dom] = lf
-                    if l_st in ["unsubscribed", "do_not_contact"]:
+                    if l_dom and l_dom not in FREE_EMAIL_DOMAINS:
                         dnc_domains.add(l_dom)
 
-    # Load existing manual_outreach.csv if exists
-    existing_rows = []
+    # Load manual_outreach.csv
+    manual_rows = []
     if os.path.exists(manual_filepath):
         with open(manual_filepath, "r", encoding="utf-8") as f:
-            existing_rows = list(csv.DictReader(f))
-        for r in existing_rows:
+            manual_rows = list(csv.DictReader(f))
+        for r in manual_rows:
             m_em = normalize_email(r.get("email", ""))
             m_dom = extract_domain(r.get("website", "")) or (extract_domain(m_em) if m_em else "")
             m_st = r.get("manual_status", "")
             if m_st == "do_not_contact":
                 if m_em:
                     dnc_emails.add(m_em)
-                if m_dom:
+                if m_dom and m_dom not in FREE_EMAIL_DOMAINS:
                     dnc_domains.add(m_dom)
 
-    # Duplicate & DNC validation: print which one
+    # DNC suppression check
     if clean_email and clean_email in dnc_emails:
         print(f"[ERROR] Rejected: email '{mask_email(clean_email)}' is in the do-not-contact suppression list.")
         return False
@@ -4367,30 +4449,81 @@ def add_manual_lead(business, segment, website, phone="", whatsapp="", email="",
         print(f"[ERROR] Rejected: website domain '{dom}' is in the do-not-contact suppression list.")
         return False
 
-    if clean_email and clean_email in log_emails:
-        print(f"[ERROR] Rejected: email '{mask_email(clean_email)}' already exists in {os.path.basename(log_filepath)}.")
-        return False
-    if dom and dom in log_domains:
-        print(f"[ERROR] Rejected: website domain '{dom}' already exists in {os.path.basename(log_filepath)}.")
-        return False
-
-    if clean_email and clean_email in lead_file_emails:
-        src = os.path.basename(lead_file_emails[clean_email])
-        print(f"[ERROR] Rejected: email '{mask_email(clean_email)}' already exists in {src}.")
-        return False
-    if dom and dom in lead_file_domains:
-        src = os.path.basename(lead_file_domains[dom])
-        print(f"[ERROR] Rejected: website domain '{dom}' already exists in {src}.")
-        return False
-
-    for r in existing_rows:
-        if clean_email and normalize_email(r.get("email", "")) == clean_email:
-            print(f"[ERROR] Rejected: email '{mask_email(clean_email)}' already exists in {os.path.basename(manual_filepath)}.")
+    # Rule (a) Email check
+    if clean_email:
+        if clean_email in log_emails:
+            print(f"[ERROR] Rejected by rule (a) email: email '{mask_email(clean_email)}' already exists in {os.path.basename(log_filepath)}.")
             return False
-        r_dom = extract_domain(r.get("website", ""))
-        if dom and r_dom and r_dom == dom:
-            print(f"[ERROR] Rejected: website domain '{dom}' already exists in {os.path.basename(manual_filepath)}.")
+        for lf, r in lead_rows:
+            if normalize_email(r.get("email", "")) == clean_email:
+                print(f"[ERROR] Rejected by rule (a) email: email '{mask_email(clean_email)}' already exists in {os.path.basename(lf)}.")
+                return False
+        for r in manual_rows:
+            if normalize_email(r.get("email", "")) == clean_email:
+                print(f"[ERROR] Rejected by rule (a) email: email '{mask_email(clean_email)}' already exists in {os.path.basename(manual_filepath)}.")
+                return False
+
+    # Rule (b) Phone digits (last 10) check
+    if cand_p10:
+        if cand_p10 in log_phones:
+            print(f"[ERROR] Rejected by rule (b) phone: last 10 digits '***{cand_p10[-4:]}' match existing lead in {os.path.basename(log_phones[cand_p10])}.")
             return False
+        for lf, r in lead_rows:
+            r_p10 = clean_last10_phone(r.get("phone", "")) or clean_last10_phone(r.get("whatsapp", ""))
+            if r_p10 and r_p10 == cand_p10:
+                print(f"[ERROR] Rejected by rule (b) phone: last 10 digits '***{cand_p10[-4:]}' match existing lead in {os.path.basename(lf)}.")
+                return False
+        for r in manual_rows:
+            r_p10 = clean_last10_phone(r.get("phone", "")) or clean_last10_phone(r.get("whatsapp", ""))
+            if r_p10 and r_p10 == cand_p10:
+                print(f"[ERROR] Rejected by rule (b) phone: last 10 digits '***{cand_p10[-4:]}' match existing lead in {os.path.basename(manual_filepath)}.")
+                return False
+
+    # Rule (c) Website domain check (against leads*.csv websites and outreach_log email domains)
+    if dom:
+        if dom in log_email_domains:
+            print(f"[ERROR] Rejected by rule (c) website domain: domain '{dom}' matches email domain in {os.path.basename(log_filepath)}.")
+            return False
+        for lf, r in lead_rows:
+            r_site_dom = extract_domain(r.get("website", ""))
+            r_em_dom = extract_domain(r.get("email", ""))
+            if r_site_dom and r_site_dom == dom:
+                print(f"[ERROR] Rejected by rule (c) website domain: domain '{dom}' matches website in {os.path.basename(lf)}.")
+                return False
+            if r_em_dom and r_em_dom not in FREE_EMAIL_DOMAINS and r_em_dom == dom:
+                print(f"[ERROR] Rejected by rule (c) website domain: domain '{dom}' matches email domain in {os.path.basename(lf)}.")
+                return False
+        for r in manual_rows:
+            r_site_dom = extract_domain(r.get("website", ""))
+            r_em_dom = extract_domain(r.get("email", ""))
+            if r_site_dom and r_site_dom == dom:
+                print(f"[ERROR] Rejected by rule (c) website domain: domain '{dom}' matches website in {os.path.basename(manual_filepath)}.")
+                return False
+            if r_em_dom and r_em_dom not in FREE_EMAIL_DOMAINS and r_em_dom == dom:
+                print(f"[ERROR] Rejected by rule (c) website domain: domain '{dom}' matches email domain in {os.path.basename(manual_filepath)}.")
+                return False
+
+    # Rule (d) Normalized business name with similarity check
+    if business.strip():
+        for e_biz in log_businesses:
+            is_sim, score = check_business_name_similarity(business, e_biz)
+            if is_sim:
+                print(f"[ERROR] Rejected by rule (d) business name: normalized name '{business.strip()}' matches '{e_biz}' (similarity {score:.2f}) in {os.path.basename(log_filepath)}.")
+                return False
+        for lf, r in lead_rows:
+            l_biz = r.get("business_name", "").strip()
+            if l_biz:
+                is_sim, score = check_business_name_similarity(business, l_biz)
+                if is_sim:
+                    print(f"[ERROR] Rejected by rule (d) business name: normalized name '{business.strip()}' matches '{l_biz}' (similarity {score:.2f}) in {os.path.basename(lf)}.")
+                    return False
+        for r in manual_rows:
+            m_biz = r.get("business_name", "").strip()
+            if m_biz:
+                is_sim, score = check_business_name_similarity(business, m_biz)
+                if is_sim:
+                    print(f"[ERROR] Rejected by rule (d) business name: normalized name '{business.strip()}' matches '{m_biz}' (similarity {score:.2f}) in {os.path.basename(manual_filepath)}.")
+                    return False
 
     # Create new row adhering strictly to MANUAL_OUTREACH_FIELDS
     new_row = {
@@ -4411,14 +4544,14 @@ def add_manual_lead(business, segment, website, phone="", whatsapp="", email="",
         "bounced": "no",
         "last_contacted": "",
     }
-    existing_rows.append(new_row)
+    manual_rows.append(new_row)
 
     # Atomic rewrite
     tmp_path = manual_filepath + ".tmp"
     with open(tmp_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=MANUAL_OUTREACH_FIELDS)
         writer.writeheader()
-        writer.writerows(existing_rows)
+        writer.writerows(manual_rows)
     os.replace(tmp_path, manual_filepath)
 
     print(f"[OK] Successfully added prospect '{business.strip()}' to {manual_filepath}:")
@@ -4433,6 +4566,84 @@ def add_manual_lead(business, segment, website, phone="", whatsapp="", email="",
     print(f"     Manual Status:   new")
     print(f"     Already Emailed: no")
     return True
+
+def report_phone_leads(phone_leads_filepath="leads_phone_only.csv", log_filepath=OUTREACH_LOG_CSV):
+    """
+    Read-only report for leads_phone_only.csv:
+    - row count
+    - rows with a phone number
+    - rows whose stored data indicates Bengaluru
+    - counts by segment
+    - how many are already in outreach_log.csv
+    Prints counts only, never prints names or contact numbers.
+    """
+    if not os.path.exists(phone_leads_filepath):
+        print(f"[PHONE LEADS REPORT] File '{phone_leads_filepath}' not found.")
+        return {}
+
+    with open(phone_leads_filepath, "r", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+
+    total = len(rows)
+    with_phone = sum(1 for r in rows if (r.get("phone") or "").strip())
+
+    # Stored data indicating Bengaluru: STD code 080 / +9180 or explicit text
+    blr_count = 0
+    for r in rows:
+        phone = (r.get("phone") or "").strip()
+        clean_p = re.sub(r"[^0-9+]", "", phone)
+        text = " ".join(str(v) for v in r.values()).lower()
+        if (
+            "080" in text
+            or "bengaluru" in text
+            or "bangalore" in text
+            or clean_p.startswith("+9180")
+            or clean_p.startswith("9180")
+            or clean_p.startswith("080")
+        ):
+            blr_count += 1
+
+    segments = Counter(r.get("business_type") or "unclassified" for r in rows)
+
+    # Check how many are already in outreach_log.csv (initial or followup sends)
+    log_emails = set()
+    log_names = set()
+    if os.path.exists(log_filepath):
+        for entry in load_outreach_log(log_filepath):
+            em = normalize_email(entry.get("recipient_email", ""))
+            bn = normalize_business_name(entry.get("business_name", ""))
+            if em:
+                log_emails.add(em)
+            if bn:
+                log_names.add(bn)
+
+    in_log = 0
+    for r in rows:
+        em = normalize_email(r.get("email", ""))
+        bn = normalize_business_name(r.get("business_name", ""))
+        if (em and em in log_emails) or (bn and bn in log_names):
+            in_log += 1
+
+    print("\n" + "=" * 65)
+    print(f"READ-ONLY REPORT: {os.path.basename(phone_leads_filepath)}")
+    print("=" * 65)
+    print(f"Total Rows:                                 {total}")
+    print(f"Rows with Phone Number:                     {with_phone}")
+    print(f"Rows whose Stored Data Indicates Bengaluru: {blr_count}")
+    print("\nCounts by Segment:")
+    for seg, cnt in segments.most_common():
+        print(f"  - {seg:<18}: {cnt}")
+    pct = (in_log / total * 100) if total else 0.0
+    print(f"\nAlready in outreach_log.csv:                {in_log} / {total} ({pct:.1f}%)")
+    print("=" * 65 + "\n")
+
+    return {
+        "total": total,
+        "with_phone": with_phone,
+        "indicates_bengaluru": blr_count,
+        "by_segment": dict(segments),
+        "in_outreach_log": in_log,
+    }
 
 def generate_manual_report(manual_filepath=MANUAL_OUTREACH_CSV):
     """
@@ -4598,9 +4809,15 @@ def main():
     parser.add_argument("--whatsapp", type=str, help="WhatsApp number for manual-add.")
     parser.add_argument("--source", type=str, help="Source reference for manual-add.")
     parser.add_argument("--manual-report", action="store_true", help="Print manual outreach report.")
+    parser.add_argument("--report-phone-leads", action="store_true", help="Print read-only summary report for leads_phone_only.csv.")
 
 
     args = parser.parse_args()
+
+    if args.command == "report-phone-leads" or args.report_phone_leads:
+        phone_f = args.leads_file if args.leads_file and "phone" in args.leads_file else "leads_phone_only.csv"
+        report_phone_leads(phone_leads_filepath=phone_f, log_filepath=OUTREACH_LOG_CSV)
+        return
 
     if args.command == "manual-add":
         if not args.business or not args.segment or not args.website:

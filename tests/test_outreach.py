@@ -2597,6 +2597,230 @@ class TestPhase4eManualOutreach:
         assert "Total Prospects: 3" in out
 
 
+class TestPhase4fVerificationAndDedupe:
+    """Tests for Phase 4f deduplication rules (a)-(d), Gmail edge cases, leads_phone_only exemption, and reporting."""
+
+    def test_manual_add_rule_a_email_rejection(self, tmp_path, capsys):
+        manual_file = tmp_path / "manual_outreach.csv"
+        log_file = tmp_path / "outreach_log.csv"
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            w = op.csv.DictWriter(f, fieldnames=op.OUTREACH_LOG_FIELDS)
+            w.writeheader()
+            w.writerow({"recipient_email": "dup@target.com", "business_name": "Dup Co", "status": "sent", "email_type": "initial"})
+
+        ok = op.add_manual_lead(
+            business="New Biz",
+            segment="agencies",
+            website="https://newbiz.com",
+            email="dup@target.com",
+            manual_filepath=str(manual_file),
+            log_filepath=str(log_file),
+            leads_files=[]
+        )
+        assert not ok
+        out = capsys.readouterr().out
+        assert "Rejected by rule (a) email" in out
+        assert "outreach_log.csv" in out
+
+    def test_manual_add_rule_b_phone_rejection(self, tmp_path, capsys):
+        manual_file = tmp_path / "manual_outreach.csv"
+        leads_file = tmp_path / "leads_test.csv"
+        log_file = tmp_path / "outreach_log.csv"
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            w = op.csv.DictWriter(f, fieldnames=op.OUTREACH_LOG_FIELDS)
+            w.writeheader()
+        with open(leads_file, "w", newline="", encoding="utf-8") as f:
+            w = op.csv.DictWriter(f, fieldnames=op.LEADS_FIELDS)
+            w.writeheader()
+            w.writerow({"business_name": "Phone Lead", "phone": "+91 98888 12345", "website": "https://lead1.com"})
+
+        ok = op.add_manual_lead(
+            business="Another Biz",
+            segment="gyms",
+            website="https://anotherbiz.com",
+            phone="09888812345",  # Same last 10 digits: 9888812345
+            manual_filepath=str(manual_file),
+            log_filepath=str(log_file),
+            leads_files=[str(leads_file)]
+        )
+        assert not ok
+        out = capsys.readouterr().out
+        assert "Rejected by rule (b) phone" in out
+        assert "leads_test.csv" in out
+
+    def test_manual_add_rule_c_website_domain_rejection(self, tmp_path, capsys):
+        manual_file = tmp_path / "manual_outreach.csv"
+        log_file = tmp_path / "outreach_log.csv"
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            w = op.csv.DictWriter(f, fieldnames=op.OUTREACH_LOG_FIELDS)
+            w.writeheader()
+            w.writerow({"recipient_email": "contact@apexpartners.com", "business_name": "Apex", "status": "sent", "email_type": "initial"})
+
+        ok = op.add_manual_lead(
+            business="Apex Growth",
+            segment="agencies",
+            website="https://apexpartners.com/about",  # Domain matches email domain in outreach_log
+            email="someone_else@somewhere.com",
+            manual_filepath=str(manual_file),
+            log_filepath=str(log_file),
+            leads_files=[]
+        )
+        assert not ok
+        out = capsys.readouterr().out
+        assert "Rejected by rule (c) website domain" in out
+        assert "outreach_log.csv" in out
+
+    def test_manual_add_rule_d_business_name_similarity_rejection(self, tmp_path, capsys):
+        manual_file = tmp_path / "manual_outreach.csv"
+        leads_file = tmp_path / "leads_custom.csv"
+        log_file = tmp_path / "outreach_log.csv"
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            w = op.csv.DictWriter(f, fieldnames=op.OUTREACH_LOG_FIELDS)
+            w.writeheader()
+        with open(leads_file, "w", newline="", encoding="utf-8") as f:
+            w = op.csv.DictWriter(f, fieldnames=op.LEADS_FIELDS)
+            w.writeheader()
+            w.writerow({"business_name": "Dr C Jagadeesh's Dental Clinic, The Center for Smile Correction", "website": "https://jagadeesh.com"})
+
+        # Normalization strips Dr, Dental, Clinic, The, Center, etc.
+        ok = op.add_manual_lead(
+            business="Jagadeesh Dental Clinic",
+            segment="clinics",
+            website="https://differentdomain123.com",
+            email="completely_unique@testdomain.com",
+            manual_filepath=str(manual_file),
+            log_filepath=str(log_file),
+            leads_files=[str(leads_file)]
+        )
+        assert not ok
+        out = capsys.readouterr().out
+        assert "Rejected by rule (d) business name" in out
+        assert "leads_custom.csv" in out
+
+    def test_gmail_addressed_business_already_emailed_under_another_address(self, tmp_path, capsys):
+        manual_file = tmp_path / "manual_outreach.csv"
+        log_file = tmp_path / "outreach_log.csv"
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            w = op.csv.DictWriter(f, fieldnames=op.OUTREACH_LOG_FIELDS)
+            w.writeheader()
+            # Originally emailed under custom domain
+            w.writerow({
+                "recipient_email": "director@summithealthcare.in",
+                "business_name": "Summit Healthcare Clinic",
+                "status": "sent",
+                "email_type": "initial"
+            })
+
+        # Prospect tries to be added with a brand new Gmail address and website
+        ok = op.add_manual_lead(
+            business="Summit Healthcare",
+            segment="clinics",
+            website="https://summithealthcare.in",
+            email="summithealth.blr@gmail.com",
+            manual_filepath=str(manual_file),
+            log_filepath=str(log_file),
+            leads_files=[]
+        )
+        assert not ok
+        out = capsys.readouterr().out
+        assert "Rejected by rule (c) website domain" in out or "Rejected by rule (d) business name" in out
+        assert "outreach_log.csv" in out
+
+    def test_leads_phone_only_exemption_rule(self, tmp_path, capsys):
+        manual_file = tmp_path / "manual_outreach.csv"
+        phone_file = tmp_path / "leads_phone_only.csv"
+        log_file = tmp_path / "outreach_log.csv"
+
+        # Create phone-only file with a prospect that has NOT been emailed in outreach_log
+        with open(phone_file, "w", newline="", encoding="utf-8") as f:
+            w = op.csv.DictWriter(f, fieldnames=["business_name", "email", "business_type", "contact_name", "phone", "context_notes", "contact_method"])
+            w.writeheader()
+            w.writerow({
+                "business_name": "Fresh Studio Gym",
+                "email": "",
+                "business_type": "gym",
+                "phone": "+91 99999 88888",
+                "context_notes": "No website listed"
+            })
+
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            w = op.csv.DictWriter(f, fieldnames=op.OUTREACH_LOG_FIELDS)
+            w.writeheader()
+
+        # Case A: Not in outreach_log -> leads_phone_only.csv does NOT block manual-add!
+        ok = op.add_manual_lead(
+            business="Fresh Studio Gym",
+            segment="gyms",
+            website="https://freshgymblr.com",
+            phone="+91 99999 88888",
+            manual_filepath=str(manual_file),
+            log_filepath=str(log_file),
+            leads_files=[str(phone_file)]
+        )
+        assert ok
+        out = capsys.readouterr().out
+        assert "Successfully added prospect 'Fresh Studio Gym'" in out
+
+        # Case B: If outreach_log.csv has recorded a send for this prospect, it DOES block!
+        with open(log_file, "a", newline="", encoding="utf-8") as f:
+            w = op.csv.DictWriter(f, fieldnames=op.OUTREACH_LOG_FIELDS)
+            w.writerow({
+                "recipient_email": "gym@freshgymblr.com",
+                "business_name": "Fresh Studio Gym",
+                "status": "sent",
+                "email_type": "initial"
+            })
+
+        manual_file2 = tmp_path / "manual_outreach2.csv"
+        ok_blocked = op.add_manual_lead(
+            business="Fresh Studio Gym",
+            segment="gyms",
+            website="https://freshgymblr.com",
+            phone="+91 99999 88888",
+            manual_filepath=str(manual_file2),
+            log_filepath=str(log_file),
+            leads_files=[str(phone_file)]
+        )
+        assert not ok_blocked
+        out_blocked = capsys.readouterr().out
+        assert "outreach_log.csv" in out_blocked
+
+    def test_report_phone_leads_output_and_counts(self, tmp_path, capsys):
+        phone_file = tmp_path / "leads_phone_only.csv"
+        log_file = tmp_path / "outreach_log.csv"
+
+        with open(phone_file, "w", newline="", encoding="utf-8") as f:
+            w = op.csv.DictWriter(f, fieldnames=["business_name", "email", "business_type", "contact_name", "phone", "context_notes", "contact_method"])
+            w.writeheader()
+            w.writerow({"business_name": "Blr Gym", "phone": "080 2345 6789", "business_type": "gym"})
+            w.writerow({"business_name": "US Dental", "phone": "+1-512-444-5555", "business_type": "dentists"})
+            w.writerow({"business_name": "No Phone Clinic", "phone": "", "business_type": "clinic"})
+
+        with open(log_file, "w", newline="", encoding="utf-8") as f:
+            w = op.csv.DictWriter(f, fieldnames=op.OUTREACH_LOG_FIELDS)
+            w.writeheader()
+            w.writerow({"business_name": "Blr Gym", "recipient_email": "blr@gym.com", "status": "sent", "email_type": "initial"})
+
+        rep = op.report_phone_leads(phone_leads_filepath=str(phone_file), log_filepath=str(log_file))
+        assert rep["total"] == 3
+        assert rep["with_phone"] == 2
+        assert rep["indicates_bengaluru"] == 1
+        assert rep["by_segment"]["gym"] == 1
+        assert rep["by_segment"]["dentists"] == 1
+        assert rep["by_segment"]["clinic"] == 1
+        assert rep["in_outreach_log"] == 1
+
+        out = capsys.readouterr().out
+        assert "Total Rows:                                 3" in out
+        assert "Rows with Phone Number:                     2" in out
+        assert "Rows whose Stored Data Indicates Bengaluru: 1" in out
+        assert "Already in outreach_log.csv:                1 / 3 (33.3%)" in out
+        # Assert no phone numbers or prospect names leaked in output
+        assert "080 2345 6789" not in out
+        assert "+1-512-444-5555" not in out
+        assert "Blr Gym" not in out
+
+
 
 
 
