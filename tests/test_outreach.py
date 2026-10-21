@@ -169,7 +169,10 @@ class TestCTAAndPrivacy:
         for seg in SEGMENTS:
             lead = {"business_name": "Test Co", "segment": seg, "website": "https://test.co", "email": "info@test.co"}
             _, body = generate_email(lead)
-            assert "Want me to make a free sample like it for your business, using dummy data?" in body
+            if seg in op.NEW_SEGMENT_TEMPLATES:
+                assert op.OFFER_TEXT in body
+            else:
+                assert "Want me to make a free sample like it for your business, using dummy data?" in body
 
     def test_no_data_or_sheets_requested_from_recipient(self):
         for seg in SEGMENTS:
@@ -934,12 +937,20 @@ class TestPersonalisationOffAndNewBodyRules:
             assert op.count_words(body_only) < 90, f"Body for {seg} exceeds 90 words ({op.count_words(body_only)})"
             assert op.count_words(subj) < 8, f"Subject for {seg} exceeds 8 words ({op.count_words(subj)})"
 
-            assert "Hi Zenith team," in body
-            assert op.SEGMENT_COPY[seg]["problem"] in body
-            assert op.SEGMENT_COPY[seg]["offer"] in body
-            assert expected_sample in body
-            assert expected_cta in body
             assert "Sheetbolt · Automate the mess" in body
+            if seg in op.NEW_SEGMENT_TEMPLATES:
+                assert "Hi," in body
+                assert "I'm Karan, a freelance data analyst." in body
+                assert op.NEW_SEGMENT_TEMPLATES[seg]["what_i_do"] in body
+                assert op.NEW_SEGMENT_TEMPLATES[seg]["question"] in body
+                assert op.OFFER_TEXT in body
+                assert expected_sample not in body
+            else:
+                assert "Hi Zenith team," in body
+                assert op.SEGMENT_COPY[seg]["problem"] in body
+                assert op.SEGMENT_COPY[seg]["offer"] in body
+                assert expected_sample in body
+                assert expected_cta in body
 
     def test_greeting_rules_strip_leading_the_and_length_fallback(self):
         # 1. "The Registry of Sarees" -> strips "The " -> "Registry of Sarees" -> <=4 words and <=30 chars -> "Hi Registry of Sarees team,"
@@ -2819,6 +2830,408 @@ class TestPhase4fVerificationAndDedupe:
         assert "080 2345 6789" not in out
         assert "+1-512-444-5555" not in out
         assert "Blr Gym" not in out
+
+
+class TestPhase4gLeadVerificationAndSuppression:
+    """Tests for Phase 4g lead verification, RCPT TO handshake, and permanent suppression list."""
+
+    def test_verification_field_in_leads_fields(self):
+        assert "verification" in op.LEADS_FIELDS
+
+    def test_bounced_suppression_list_configured(self):
+        expected_bounces = {
+            "hello@emergedentalstudio.com",
+            "info@saartha.com",
+            "nidhin@growthhackers.digital",
+            "hello@foxymoron.in",
+            "info@sankalpnethralaya.com",
+            "hello@attnagency.com",
+        }
+        for email in expected_bounces:
+            assert email in op.BOUNCED_SUPPRESSION_EMAILS
+            # Verify included in get_global_suppressed_emails
+            suppressed = op.get_global_suppressed_emails()
+            assert email in suppressed
+
+    def test_verify_single_lead_email_invalid_syntax(self):
+        status, reason = op.verify_single_lead_email("not-an-email")
+        assert status == "invalid"
+        assert "syntax" in reason.lower()
+
+    def test_verify_single_lead_email_no_mx(self, monkeypatch):
+        monkeypatch.setattr(op, "get_mx_hosts", lambda domain, timeout=5: [])
+        status, reason = op.verify_single_lead_email("contact@nonexistentdomain12345.in")
+        assert status == "invalid"
+        assert "no dns mx" in reason.lower()
+
+    def test_verify_single_lead_email_550_rcpt_treated_as_invalid(self, monkeypatch):
+        class MockSMTP:
+            def __init__(self, host, port, timeout=7):
+                pass
+            def ehlo(self, name):
+                return (250, b"OK")
+            def mail(self, sender):
+                return (250, b"OK")
+            def rcpt(self, recipient):
+                return (550, b"5.1.1 User unknown NoSuchUser")
+            def quit(self):
+                pass
+            def close(self):
+                pass
+
+        monkeypatch.setattr(op, "get_mx_hosts", lambda domain, timeout=5: ["mx.healthycare.in"])
+        monkeypatch.setattr(op, "_resolve_mx_host_with_retry", lambda host, timeout=5, retries=1: (True, None))
+        monkeypatch.setattr(op.smtplib, "SMTP", MockSMTP)
+        status, reason = op.verify_single_lead_email("unknownuser@healthycare.in")
+        assert status == "invalid"
+        assert "rejected" in reason.lower()
+
+    def test_verify_single_lead_email_timeout_treated_as_unknown(self, monkeypatch):
+        def mock_smtp(host, port, timeout=7):
+            raise TimeoutError("Connection timed out")
+
+        monkeypatch.setattr(op, "get_mx_hosts", lambda domain, timeout=5: ["mx.healthycare.in"])
+        monkeypatch.setattr(op, "_resolve_mx_host_with_retry", lambda host, timeout=5, retries=1: (True, None))
+        monkeypatch.setattr(op.smtplib, "SMTP", mock_smtp)
+        status, reason = op.verify_single_lead_email("doctor@healthycare.in")
+        assert status == "unknown"
+        assert "timed out" in reason.lower()
+
+    def test_verify_single_lead_email_greylisting_4xx_treated_as_unknown(self, monkeypatch):
+        class MockSMTP:
+            def __init__(self, host, port, timeout=7):
+                pass
+            def ehlo(self, name):
+                return (250, b"OK")
+            def mail(self, sender):
+                return (250, b"OK")
+            def rcpt(self, recipient):
+                return (450, b"4.2.0 Greylisting active, try again later")
+            def quit(self):
+                pass
+            def close(self):
+                pass
+
+        monkeypatch.setattr(op, "get_mx_hosts", lambda domain, timeout=5: ["mx.healthycare.in"])
+        monkeypatch.setattr(op, "_resolve_mx_host_with_retry", lambda host, timeout=5, retries=1: (True, None))
+        monkeypatch.setattr(op.smtplib, "SMTP", MockSMTP)
+        status, reason = op.verify_single_lead_email("greylistuser@healthycare.in")
+        assert status == "unknown"
+        assert "greylisting" in reason.lower()
+
+    def test_verify_single_lead_email_250_non_catch_all_treated_as_valid(self, monkeypatch):
+        op._CATCH_ALL_CACHE.clear()
+        class MockSMTP:
+            def __init__(self, host, port, timeout=7):
+                pass
+            def ehlo(self, name):
+                return (250, b"OK")
+            def mail(self, sender):
+                return (250, b"OK")
+            def rcpt(self, recipient):
+                if "zz_probe_" in recipient:
+                    return (550, b"5.1.1 NoSuchUser")
+                return (250, b"2.1.5 Recipient OK")
+            def quit(self):
+                pass
+            def close(self):
+                pass
+
+        monkeypatch.setattr(op, "get_mx_hosts", lambda domain, timeout=5: ["mx.healthycare.in"])
+        monkeypatch.setattr(op, "_resolve_mx_host_with_retry", lambda host, timeout=5, retries=1: (True, None))
+        monkeypatch.setattr(op.smtplib, "SMTP", MockSMTP)
+        status, reason = op.verify_single_lead_email("frontdesk@healthycare.in")
+        assert status == "valid"
+        assert "250 ok" in reason.lower()
+
+    def test_verify_single_lead_email_catch_all_returns_unknown(self, monkeypatch):
+        op._CATCH_ALL_CACHE.clear()
+        class MockSMTPCatchAll:
+            def __init__(self, host, port, timeout=7):
+                pass
+            def ehlo(self, name):
+                return (250, b"OK")
+            def mail(self, sender):
+                return (250, b"OK")
+            def rcpt(self, recipient):
+                # Accepts all recipients
+                return (250, b"2.1.5 Recipient OK")
+            def quit(self):
+                pass
+            def close(self):
+                pass
+
+        monkeypatch.setattr(op, "get_mx_hosts", lambda domain, timeout=5: ["mx.catchallbiz.in"])
+        monkeypatch.setattr(op, "_resolve_mx_host_with_retry", lambda host, timeout=5, retries=1: (True, None))
+        monkeypatch.setattr(op.smtplib, "SMTP", MockSMTPCatchAll)
+        status, reason = op.verify_single_lead_email("sales@catchallbiz.in")
+        assert status == "unknown"
+        assert "catch_all" in reason.lower()
+        # Ensure cached for domain
+        assert op._CATCH_ALL_CACHE.get("catchallbiz.in") is True
+
+    def test_verify_single_lead_email_unresolvable_mx_returns_invalid(self, monkeypatch):
+        monkeypatch.setattr(op, "get_mx_hosts", lambda domain, timeout=5: ["unresolvable-mx.bogusdomain.in"])
+        monkeypatch.setattr(op, "_resolve_mx_host_with_retry", lambda host, timeout=5, retries=1: (False, "[Errno 11001] getaddrinfo failed"))
+        monkeypatch.setattr(op, "_check_local_dns_health", lambda: True)
+        status, reason = op.verify_single_lead_email("info@bogusdomain.in")
+        assert status == "invalid"
+        assert reason == "no resolvable MX host"
+
+    def test_verify_single_lead_email_transient_dns_failure_returns_unknown(self, monkeypatch):
+        monkeypatch.setattr(op, "get_mx_hosts", lambda domain, timeout=5: ["transient-mx.slowdns.in"])
+        monkeypatch.setattr(op, "_resolve_mx_host_with_retry", lambda host, timeout=5, retries=1: (None, "dns_timeout"))
+        status, reason = op.verify_single_lead_email("info@slowdns.in")
+        assert status == "unknown"
+        assert "transient" in reason.lower()
+
+    def test_get_eligible_leads_require_verified_filter(self):
+        leads = [
+            {"business_name": "Valid Lead", "email": "valid@lead.com", "segment": "clinics", "status": "new", "website": "https://lead.com", "verification": "valid"},
+            {"business_name": "Invalid Lead", "email": "invalid@lead.com", "segment": "clinics", "status": "new", "website": "https://lead.com", "verification": "invalid"},
+            {"business_name": "Unknown Lead", "email": "unknown@lead.com", "segment": "clinics", "status": "new", "website": "https://lead.com", "verification": "unknown"},
+            {"business_name": "Unverified Lead", "email": "unverif@lead.com", "segment": "clinics", "status": "new", "website": "https://lead.com", "verification": ""},
+        ]
+        # require_verified=False allows all 4 (subject to other standard checks)
+        # require_verified=True only allows verification == 'valid'
+        eligible_all = op.get_eligible_leads(leads, allowed_cities=[], require_verified=False)
+        assert len(eligible_all) == 4
+
+        eligible_valid_only = op.get_eligible_leads(leads, allowed_cities=[], require_verified=True)
+        assert len(eligible_valid_only) == 1
+        assert eligible_valid_only[0]["business_name"] == "Valid Lead"
+
+    def test_verify_leads_command_does_not_change_status(self, tmp_path, monkeypatch):
+        dummy_leads_file = tmp_path / "leads.csv"
+        leads_data = [
+            {"business_name": "Good Biz", "email": "good@biz.com", "segment": "clinics", "status": "new", "website": "https://good.com"},
+            {"business_name": "Bad Biz", "email": "bad@biz.com", "segment": "clinics", "status": "new", "website": "https://bad.com"},
+        ]
+        with open(dummy_leads_file, "w", newline="", encoding="utf-8") as f:
+            w = op.csv.DictWriter(f, fieldnames=op.LEADS_FIELDS)
+            w.writeheader()
+            for r in leads_data:
+                w.writerow(r)
+
+        def mock_verify(email, timeout=7):
+            if "good" in email:
+                return "valid", "250 OK"
+            return "invalid", "550 NoSuchUser"
+
+        monkeypatch.setattr(op, "verify_single_lead_email", mock_verify)
+        results = op.verify_leads_command(filepath=str(dummy_leads_file))
+
+        # Check in-memory results
+        assert len(results["valid"]) == 1
+        assert len(results["invalid"]) == 1
+
+        # Check persisted file
+        reloaded = op.load_leads(str(dummy_leads_file))
+        assert len(reloaded) == 2
+        for r in reloaded:
+            # STATUS MUST REMAIN 'new'
+            assert r["status"] == "new"
+
+        good_lead = next(r for r in reloaded if r["business_name"] == "Good Biz")
+        bad_lead = next(r for r in reloaded if r["business_name"] == "Bad Biz")
+        assert good_lead["verification"] == "valid"
+        assert bad_lead["verification"] == "invalid"
+
+
+class TestPhase4hNewTemplates:
+    """Tests for updated initial-email templates (manufacturers, retail, agencies)."""
+
+    def test_subjects_lowercase_under_7_words_and_no_pitch_words(self):
+        forbidden_pitch = ["stop", "automate", "fewer", "cut"]
+        for seg in ["manufacturers", "retail", "agencies"]:
+            variants = op.SUBJECT_VARIANTS[seg]
+            for v in variants:
+                assert v == v.lower(), f"Subject '{v}' is not lowercase"
+                assert op.count_words(v) < 7, f"Subject '{v}' is not under 7 words ({op.count_words(v)} words)"
+                v_words = [w.strip("?,.:;!") for w in v.lower().split()]
+                for bad in forbidden_pitch:
+                    assert bad not in v_words, f"Subject '{v}' contains forbidden pitch word '{bad}'"
+
+    def test_greeting_first_name_and_fallback(self):
+        # Lead with contact name
+        lead1 = {"business_name": "TTP Tech", "contact_name": "Deepak Sharma", "segment": "manufacturers"}
+        assert op.get_initial_greeting(lead1) == "Hi Deepak,"
+
+        # Lead with first_name
+        lead2 = {"business_name": "TTP Tech", "first_name": "karan", "segment": "manufacturers"}
+        assert op.get_initial_greeting(lead2) == "Hi Karan,"
+
+        # Lead without contact name
+        lead3 = {"business_name": "TTP Tech", "segment": "manufacturers"}
+        assert op.get_initial_greeting(lead3) == "Hi,"
+
+    def test_credibility_line_in_intro_sentence(self, monkeypatch):
+        # Default empty CREDIBILITY_LINE
+        monkeypatch.setattr(op, "CREDIBILITY_LINE", "")
+        assert op.get_intro_sentence() == "I'm Karan, a freelance data analyst."
+
+        # Filled in CREDIBILITY_LINE
+        monkeypatch.setattr(op, "CREDIBILITY_LINE", "helping growing operations cut down spreadsheet hours")
+        assert op.get_intro_sentence() == "I'm Karan, a freelance data analyst helping growing operations cut down spreadsheet hours."
+
+        monkeypatch.setattr(op, "CREDIBILITY_LINE", "I've built reporting systems for high-growth operations.")
+        assert op.get_intro_sentence() == "I'm Karan, a freelance data analyst—I've built reporting systems for high-growth operations."
+
+    def test_email_body_under_90_words_and_no_demo_link(self, monkeypatch):
+        monkeypatch.setenv("SAMPLE_DASHBOARD_URL", "https://sheetboltanalytics.netlify.app/#top")
+        monkeypatch.setenv("SITE_URL", "https://sheetboltanalytics.netlify.app")
+        monkeypatch.setenv("OUTREACH_SUPPORT_EMAIL", "sheetbolt.analytics@gmail.com")
+
+        for seg in ["manufacturers", "retail", "agencies"]:
+            lead = {"business_name": "Acme Co", "segment": seg, "email": "info@acme.co"}
+            subj, body = op.generate_email(lead, email_type="initial")
+
+            body_only = body.split("Best,\n")[0].strip()
+            assert op.count_words(body_only) < 90
+            assert op.count_words(subj) < 7
+
+            # Demo link must NOT be in body
+            assert "https://sheetboltanalytics.netlify.app/#top" not in body
+            assert "Here's an example of what I build" not in body
+
+            # Website must be in signature only
+            assert "https://sheetboltanalytics.netlify.app" in body
+            assert "Reply STOP and I won't email again." in body
+
+            # Offer text present
+            assert "I'd love to build a free sample tracker using one of your current sheets" in body
+            assert "feel free to remove any sensitive columns" in body
+
+    def test_ad_reporting_only_in_agencies(self):
+        for seg in ["manufacturers", "retail", "agencies"]:
+            lead = {"business_name": "Acme", "segment": seg, "email": "info@acme.com"}
+            _, body = op.generate_email(lead, email_type="initial")
+            if seg == "agencies":
+                assert "ad" in body.lower()
+            else:
+                assert "ad " not in body.lower()
+                assert "roas" not in body.lower()
+                assert "campaign" not in body.lower()
+
+
+class TestPhase4iExcludedEducationSegments:
+    """Tests for segment allowlist and exclusion of education/school leads."""
+
+    def test_allowed_target_segments_allowlist(self):
+        assert "coaching" not in op.ALLOWED_TARGET_SEGMENTS
+        assert "education" not in op.ALLOWED_TARGET_SEGMENTS
+        for expected in ["manufacturers", "retail", "agencies", "accounting", "gyms", "clinics"]:
+            assert expected in op.ALLOWED_TARGET_SEGMENTS
+
+    def test_is_educational_domain(self):
+        # Educational domains (.edu.in, .ac.in, .edu, .ac.*)
+        assert op.is_educational_domain("sjcc.edu.in") is True
+        assert op.is_educational_domain("info@sjcc.edu.in") is True
+        assert op.is_educational_domain("iisc.ac.in") is True
+        assert op.is_educational_domain("oxford.ac.uk") is True
+        assert op.is_educational_domain("tokyo.ac.jp") is True
+        assert op.is_educational_domain("harvard.edu") is True
+        assert op.is_educational_domain("http://shghs.edu.in/home") is True
+
+        # Non-educational domains
+        assert op.is_educational_domain("hansagreen.com") is False
+        assert op.is_educational_domain("theregistryofsarees.com") is False
+        assert op.is_educational_domain("ttpradiators.com") is False
+        assert op.is_educational_domain("acme.co.in") is False
+        assert op.is_educational_domain("actech.com") is False
+
+    def test_is_educational_lead(self):
+        # Lead in excluded segment
+        lead_coach = {"business_name": "Test Academy", "segment": "coaching", "email": "test@test.com", "website": "http://test.com"}
+        is_blocked, reason = op.is_educational_lead(lead_coach)
+        assert is_blocked is True
+        assert "coaching" in reason
+
+        # Lead with .edu.in domain
+        lead_edu = {"business_name": "Test Agency", "segment": "agencies", "email": "info@test.edu.in", "website": "http://test.com"}
+        is_blocked, reason = op.is_educational_lead(lead_edu)
+        assert is_blocked is True
+        assert ".edu.in" in reason
+
+        # Lead with .ac.uk domain
+        lead_ac = {"business_name": "Test Shop", "segment": "retail", "email": "shop@test.ac.uk", "website": "http://test.ac.uk"}
+        is_blocked, reason = op.is_educational_lead(lead_ac)
+        assert is_blocked is True
+        assert ".ac." in reason
+
+        # Lead with school in name
+        lead_school = {"business_name": "National Public School", "segment": "manufacturers", "email": "office@nps.com", "website": "http://nps.com"}
+        is_blocked, reason = op.is_educational_lead(lead_school)
+        assert is_blocked is True
+        assert "school" in reason.lower()
+
+        # Legitimate private business lead
+        lead_legit = {"business_name": "TTP Tech", "segment": "manufacturers", "email": "sales@ttp.com", "website": "http://ttp.com"}
+        is_blocked, reason = op.is_educational_lead(lead_legit)
+        assert is_blocked is False
+        assert reason == ""
+
+    def test_get_eligible_leads_blocks_excluded_segments_and_edu_domains(self, monkeypatch):
+        leads = [
+            {"business_name": "St. Joseph's", "segment": "coaching", "email": "info@sjcc.edu.in", "status": "new", "website": "http://sjcc.edu.in", "verification": "valid"},
+            {"business_name": "Christ Univ", "segment": "coaching", "email": "mail@christ.in", "status": "new", "website": "http://christ.in", "verification": "valid"},
+            {"business_name": "Good Retail", "segment": "retail", "email": "contact@goodretail.com", "status": "new", "website": "http://goodretail.com", "verification": "valid"},
+        ]
+        monkeypatch.setattr(op, "get_global_suppressed_emails", lambda *args, **kwargs: set())
+        monkeypatch.setattr(op, "verify_lead_location", lambda *args, **kwargs: (True, "Location OK"))
+        monkeypatch.setattr(op, "check_lead_domain_match", lambda *args, **kwargs: (False, "Match OK"))
+        monkeypatch.setattr(op, "check_lead_name_vs_domain", lambda *args, **kwargs: (False, "Match OK"))
+        monkeypatch.setattr(op, "verify_email_mailbox_live", lambda *args, **kwargs: (True, "Live OK"))
+
+        eligible = op.get_eligible_leads(leads, require_verified=True)
+        emails = [l["email"] for l in eligible]
+        assert "info@sjcc.edu.in" not in emails
+        assert "mail@christ.in" not in emails
+        assert "contact@goodretail.com" in emails
+
+    def test_send_smtp_email_raises_on_educational_lead(self, monkeypatch):
+        monkeypatch.setattr(op, "verify_sender_safety", lambda *args, **kwargs: None)
+        monkeypatch.setenv("SMTP_PASS", "mock_pass")
+
+        lead = {"business_name": "St Josephs", "email": "info@sjcc.edu.in", "segment": "coaching"}
+        import pytest
+        with pytest.raises(ValueError, match="Send blocked"):
+            op.send_smtp_email("info@sjcc.edu.in", "subject", "body", lead=lead)
+
+    def test_find_leads_rejects_excluded_segment(self):
+        import pytest
+        with pytest.raises(ValueError, match="is excluded"):
+            op.find_leads_for_segment("coaching")
+
+    def test_import_leads_skips_educational_and_school_leads(self, tmp_path):
+        import csv
+        src_file = tmp_path / "imported.csv"
+        target_file = tmp_path / "leads_target.csv"
+
+        leads_to_import = [
+            {"business_name": "St Josephs College", "segment": "coaching", "website": "http://sjcc.edu.in", "email": "info@sjcc.edu.in", "status": "new"},
+            {"business_name": "Oxford University", "segment": "retail", "website": "http://ox.ac.uk", "email": "info@ox.ac.uk", "status": "new"},
+            {"business_name": "Clean Manufacturer", "segment": "manufacturers", "website": "http://cleanmfg.com", "email": "sales@cleanmfg.com", "status": "new"},
+        ]
+        with open(src_file, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=op.LEADS_FIELDS)
+            writer.writeheader()
+            for r in leads_to_import:
+                writer.writerow({k: r.get(k, "") for k in op.LEADS_FIELDS})
+
+        # Initialize empty target file
+        with open(target_file, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=op.LEADS_FIELDS)
+            writer.writeheader()
+
+        imported_count = op.import_leads_command(str(src_file), target_filepath=str(target_file))
+        assert imported_count == 1
+
+        final_rows = op.load_leads(str(target_file))
+        assert len(final_rows) == 1
+        assert final_rows[0]["business_name"] == "Clean Manufacturer"
+        assert final_rows[0]["email"] == "sales@cleanmfg.com"
+
 
 
 

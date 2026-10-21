@@ -1,0 +1,40 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Local session data & user exports (keep bundled data/ intact)
+localleads_export*.csv
+leads_*.csv
+lead_history.json
+verified_emails_cache.json
+settings.json
+places_cache/
+scratch/
+*.tmp
+
+# Unignore bundled data
+!data/
+!data/**
+
+# Environment and secrets
+.env
+.env.local
+.env.*
+
+# Distribution builds and marketing
+dist/
+build/
+*.zip
+marketing/
+
+# Playwright artifacts & Documentation screenshots
+test-results/
+playwright-report/
+docs/

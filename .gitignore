@@ -59,6 +59,10 @@ dentists_austin_sample.csv
 email_assets/
 leads*.csv
 outreach_log*.csv
-
-
-
+staging*.csv
+new_leads*.csv
+changedetection-data/
+changedetection-env/
+dry_run*.txt
+*.html
+!src/**/*.html

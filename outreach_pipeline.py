@@ -93,7 +93,18 @@ LEADS_FIELDS = [
     "whatsapp",
     "channel",
     "manual_status",
+    "verification",
 ]
+
+# Permanent suppression list of addresses that hard-bounced
+BOUNCED_SUPPRESSION_EMAILS = {
+    "hello@emergedentalstudio.com",
+    "info@saartha.com",
+    "nidhin@growthhackers.digital",
+    "hello@foxymoron.in",
+    "info@sankalpnethralaya.com",
+    "hello@attnagency.com",
+}
 
 CIRCUIT_BREAKER_STATE_FILE = "circuit_breaker_state.json"
 RESET_BREAKER_LOG_FILE = "circuit_breaker_resets.log"
@@ -154,6 +165,16 @@ SEGMENTS = [
     "accounting",
     "manufacturers",
     "coaching",
+]
+
+# Strict allowlist of target private-business segments (strictly excludes coaching and education)
+ALLOWED_TARGET_SEGMENTS = [
+    "manufacturers",
+    "retail",
+    "agencies",
+    "accounting",
+    "gyms",
+    "clinics",
 ]
 
 # OSM Overpass tag mappings for Bengaluru searches
@@ -326,6 +347,7 @@ SITE_URL = os.environ.get("SITE_URL", "")
 SAMPLE_DASHBOARD_URL = os.environ.get("SAMPLE_DASHBOARD_URL", "")
 EMAIL_IMAGES = os.environ.get("EMAIL_IMAGES", "on").strip().lower()
 PERSONALISATION = os.environ.get("PERSONALISATION", "off").strip().lower()
+CREDIBILITY_LINE = ""
 
 
 
@@ -802,6 +824,31 @@ def get_greeting(raw_name):
         return f"Hi {clean} team,"
     return "Hi there,"
 
+def get_initial_greeting(lead):
+    """
+    Use contact's first name if present in lead, else fallback to 'Hi,'.
+    """
+    contact = (lead.get("contact_name") or lead.get("first_name") or lead.get("contact") or "").strip()
+    if contact:
+        first_name = contact.split()[0].strip().capitalize()
+        return f"Hi {first_name},"
+    return "Hi,"
+
+def get_intro_sentence():
+    """
+    Build intro sentence combining Karan's role and CREDIBILITY_LINE.
+    """
+    cred = CREDIBILITY_LINE.strip()
+    if cred:
+        cred_clean = cred.rstrip(".")
+        if cred_clean.lower().startswith(("and ", "who ", "helping ", "specializing ")):
+            return f"I'm Karan, a freelance data analyst {cred_clean}."
+        elif cred_clean.lower().startswith("i "):
+            return f"I'm Karan, a freelance data analyst; {cred_clean}."
+        else:
+            return f"I'm Karan, a freelance data analyst—{cred_clean}."
+    return "I'm Karan, a freelance data analyst."
+
 
 # ----------------- EMAIL VALIDATION & MX CHECKING -----------------
 
@@ -835,6 +882,70 @@ def extract_domain(url_or_email):
         text = text[4:]
 
     return text.strip()
+
+def is_educational_domain(domain_str):
+    """
+    Check if a domain or email/URL domain ends in an educational suffix:
+    - .edu.in
+    - .ac.in
+    - .edu
+    - .ac.* (e.g. .ac.uk, .ac.jp, .ac.za, etc.)
+    """
+    if not domain_str:
+        return False
+    domain_str = domain_str.strip().lower()
+    if "@" in domain_str or "://" in domain_str or "/" in domain_str:
+        domain_str = extract_domain(domain_str)
+
+    domain_str = domain_str.strip(".")
+    if not domain_str:
+        return False
+
+    if domain_str in ["edu", "edu.in", "ac.in"]:
+        return True
+    if domain_str.endswith(".edu.in") or domain_str.endswith(".ac.in") or domain_str.endswith(".edu"):
+        return True
+
+    # Match .ac.* (e.g. .ac.uk, .ac.in, .ac.jp, etc.)
+    parts = domain_str.split(".")
+    if len(parts) >= 2 and parts[-2] == "ac":
+        return True
+
+    return False
+
+def is_educational_lead(lead):
+    """
+    Check if a lead belongs to an educational institution or excluded segment.
+    Returns (is_blocked: bool, skip_reason: str).
+    """
+    if not lead:
+        return False, ""
+
+    segment = (lead.get("segment") or "").strip().lower()
+    if segment and segment not in ALLOWED_TARGET_SEGMENTS:
+        return True, f"segment '{segment}' is not in allowed target segments ({', '.join(ALLOWED_TARGET_SEGMENTS)})"
+
+    email = lead.get("email", "")
+    website = lead.get("website", "")
+    em_dom = extract_domain(email)
+    site_dom = extract_domain(website)
+
+    if is_educational_domain(em_dom):
+        return True, f"email domain '{em_dom}' ends with educational suffix (.edu.in, .ac.in, .edu, or .ac.*)"
+    if is_educational_domain(site_dom):
+        return True, f"website domain '{site_dom}' ends with educational suffix (.edu.in, .ac.in, .edu, or .ac.*)"
+
+    # Check for school/university/college terms in business name
+    biz_name = lead.get("business_name", "")
+    school_match = re.search(
+        r"\b(school|college|university|vidyalaya|vidyapeeth|academy|polytechnic)\b",
+        f"{biz_name} {website}",
+        re.IGNORECASE,
+    )
+    if school_match:
+        return True, f"business '{biz_name}' contains educational term '{school_match.group(1)}'"
+
+    return False, ""
 
 def is_valid_email_syntax(email):
     """Strictly validate email syntax and exclude placeholders or CDN strings."""
@@ -904,19 +1015,26 @@ def check_mx_record(domain, timeout=5):
     return False
 
 def get_mx_hosts(domain, timeout=5):
-    """Extract ordered MX hostnames for a domain."""
+    """Extract ordered MX hostnames for a domain, sorted by preference."""
     domain = domain.strip().lower()
     try:
         cmd = ["nslookup", "-type=mx", domain]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         output = result.stdout or ""
-        hosts = []
+        records = []
         for line in output.splitlines():
             if "mail exchanger =" in line:
+                pref_match = re.search(r"MX preference\s*=\s*(\d+)", line, re.IGNORECASE)
+                pref = int(pref_match.group(1)) if pref_match else 100
                 parts = line.split("mail exchanger =")
                 if len(parts) == 2:
-                    hosts.append(parts[1].strip().rstrip("."))
-        return hosts
+                    h = parts[1].strip().rstrip(".")
+                    if h:
+                        records.append((pref, h))
+        if records:
+            records.sort(key=lambda x: x[0])
+            return [h for _, h in records]
+        return []
     except Exception:
         return []
 
@@ -1345,6 +1463,303 @@ def audit_leads_mailboxes(filepath=None):
 
     return flagged_list
 
+_CATCH_ALL_CACHE = {}
+
+def _check_local_dns_health():
+    """Verify if local network DNS can resolve a known global domain."""
+    try:
+        socket.getaddrinfo("google.com", 25, type=socket.SOCK_STREAM)
+        return True
+    except Exception:
+        return False
+
+def _resolve_mx_host_with_retry(host, timeout=5, retries=1):
+    """
+    Attempts to resolve an MX host.
+    - If getaddrinfo fails with socket.gaierror / Errno 11001, retries once.
+    Returns:
+    - (True, None): host resolved successfully
+    - (False, err_msg): confirmed unresolvable host (socket.gaierror)
+    - (None, err_msg): transient timeout or non-gaierror network failure
+    """
+    for attempt in range(retries + 1):
+        try:
+            socket.getaddrinfo(host, 25, type=socket.SOCK_STREAM)
+            return True, None
+        except socket.gaierror as e:
+            if attempt < retries:
+                time.sleep(0.5)
+                continue
+            return False, str(e)
+        except (socket.timeout, TimeoutError) as e:
+            return None, "dns_timeout"
+        except Exception as e:
+            return None, str(e)
+    return False, "unresolvable"
+
+def verify_single_lead_email(email, timeout=7):
+    """
+    Checks an email address via:
+    1. Syntax check
+    2. DNS MX lookup and host resolution (distinguishes unresolvable MX vs transient timeouts)
+    3. SMTP RCPT TO handshake without sending.
+    4. Catch-all detection (probes random address on same domain if 250 OK).
+    
+    Returns tuple: (status, reason)
+    - status: 'valid' | 'invalid' | 'unknown'
+    - Treat 550 / NoSuchUser / 5xx permanent rejections as 'invalid'
+    - Treat unresolvable MX (all MX hosts fail getaddrinfo) as 'invalid'
+    - Treat catch-all wildcard domains as 'unknown' (catch_all: server accepts all recipients)
+    - Treat timeouts, connection errors, and 4xx greylisting as 'unknown'
+    """
+    clean_email = normalize_email(email)
+    if not clean_email or "@" not in clean_email or not is_valid_email_syntax(clean_email):
+        return "invalid", "Invalid email syntax"
+
+    domain = extract_domain(clean_email)
+    if not domain:
+        return "invalid", "Missing domain in email address"
+
+    # 1. DNS MX lookup
+    mx_hosts = get_mx_hosts(domain, timeout=timeout)
+    if not mx_hosts:
+        return "invalid", f"No DNS MX records found for domain '{domain}'"
+
+    # 2. Unresolvable MX checking
+    resolvable_hosts = []
+    unresolvable_hosts = []
+    transient_failures = []
+
+    for mx in mx_hosts:
+        res_ok, res_err = _resolve_mx_host_with_retry(mx, timeout=timeout, retries=1)
+        if res_ok is True:
+            resolvable_hosts.append(mx)
+        elif res_ok is False:
+            unresolvable_hosts.append((mx, res_err))
+        else:
+            transient_failures.append((mx, res_err))
+
+    if not resolvable_hosts:
+        if len(unresolvable_hosts) == len(mx_hosts):
+            # All MX hosts failed getaddrinfo after retry
+            if _check_local_dns_health():
+                return "invalid", "no resolvable MX host"
+            else:
+                return "unknown", "local network/DNS resolution issue"
+        return "unknown", f"transient DNS resolution error on MX for '{domain}'"
+
+    # 3. SMTP RCPT TO handshake without sending
+    last_reason = "No MX host reachable"
+    for mx in resolvable_hosts[:2]:
+        try:
+            s = smtplib.SMTP(mx, 25, timeout=timeout)
+            try:
+                s.ehlo("sheetboltanalytics.netlify.app")
+                s.mail("sheetbolt.analytics@gmail.com")
+                code, msg = s.rcpt(clean_email)
+                msg_str = msg.decode("utf-8", errors="ignore") if isinstance(msg, bytes) else str(msg)
+                combined_resp = f"{code} {msg_str}".lower()
+
+                # Provider policy / reputation block
+                blocked_patterns = ["client host blocked", "blocked using", "blacklist", "spamhaus"]
+                if any(bp in combined_resp for bp in blocked_patterns) or ("5.7." in combined_resp) or bool(re.search(r"\b5\.7\.\d+\b", combined_resp)):
+                    return "unknown", f"Provider policy blocked probe ({code}: {msg_str[:60].strip()})"
+
+                if code == 250:
+                    # Catch-all detection
+                    if domain in _CATCH_ALL_CACHE:
+                        is_catch_all = _CATCH_ALL_CACHE[domain]
+                    else:
+                        rnd_str = "".join(random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=8))
+                        dummy_addr = f"zz_probe_{rnd_str}@{domain}"
+                        try:
+                            dummy_code, _ = s.rcpt(dummy_addr)
+                            is_catch_all = (dummy_code == 250)
+                        except Exception:
+                            is_catch_all = False
+                        _CATCH_ALL_CACHE[domain] = is_catch_all
+
+                    if is_catch_all:
+                        return "unknown", "catch_all: server accepts all recipients"
+                    else:
+                        return "valid", f"250 OK: Mailbox accepted via {mx}"
+
+                elif code == 550 or (500 <= code < 600):
+                    # 550 / NoSuchUser / permanent error
+                    return "invalid", f"Server rejected mailbox ({code}: {msg_str[:60].strip()})"
+                elif 400 <= code < 500:
+                    # 4xx transient / greylisting
+                    return "unknown", f"Transient error / greylisting ({code}: {msg_str[:60].strip()})"
+                else:
+                    return "unknown", f"Unexpected response ({code}: {msg_str[:60].strip()})"
+            finally:
+                try:
+                    s.quit()
+                except Exception:
+                    try:
+                        s.close()
+                    except Exception:
+                        pass
+        except (socket.timeout, TimeoutError):
+            last_reason = f"Connection/handshake timed out on {mx}"
+            continue
+        except (ConnectionRefusedError, OSError) as e:
+            err_msg = str(e)[:60].strip() or type(e).__name__
+            last_reason = f"Connection error on {mx}: {err_msg}"
+            continue
+        except Exception as e:
+            err_msg = str(e)[:60].strip() or type(e).__name__
+            last_reason = f"SMTP error on {mx}: {err_msg}"
+            continue
+
+    return "unknown", last_reason
+
+def verify_leads_command(filepath=None, timeout=7):
+    """
+    Checks leads with status == 'new':
+    1. Syntax check
+    2. DNS MX lookup
+    3. SMTP RCPT TO handshake without sending.
+    
+    Sets 'verification' field to 'valid', 'invalid', or 'unknown'.
+    Does NOT change any lead 'status' (status remains 'new').
+    Saves updated leads to the CSV.
+    Prints a detailed summary report before modifying any statuses.
+    """
+    if filepath is None:
+        filepath = LEADS_CSV
+
+    if not os.path.exists(filepath):
+        print(f"[ERROR] Leads file '{filepath}' does not exist.")
+        return {}
+
+    leads = load_leads(filepath)
+    new_leads = [l for l in leads if l.get("status") == "new"]
+
+    print("\n" + "=" * 75)
+    print(f"🔍 VERIFYING LEADS WITH STATUS 'new' IN: {filepath}")
+    print(f"Total prospects in file: {len(leads)} | Prospects with status 'new': {len(new_leads)}")
+    print("=" * 75)
+
+    if not new_leads:
+        print("[INFO] No leads with status 'new' found to verify.")
+        return {}
+
+    results = {"valid": [], "invalid": [], "unknown": []}
+
+    for idx, lead in enumerate(new_leads, 1):
+        biz_name = lead.get("business_name", "Unknown")
+        email = lead.get("email", "")
+        print(f"[{idx}/{len(new_leads)}] Verifying {biz_name} <{email}>...", end=" ", flush=True)
+
+        verif_status, reason = verify_single_lead_email(email, timeout=timeout)
+        lead["verification"] = verif_status
+        results[verif_status].append((lead, reason))
+
+        tag = "VALID" if verif_status == "valid" else ("INVALID" if verif_status == "invalid" else "UNKNOWN")
+        print(f"[{tag}] - {reason}")
+
+    # Save verification field to CSV without touching statuses
+    save_leads(leads, filepath)
+
+    # Print summary report
+    print("\n" + "=" * 75)
+    print("📊 LEAD VERIFICATION SUMMARY REPORT")
+    print("=" * 75)
+    print(f"Total 'new' leads verified: {len(new_leads)}")
+    print(f"  • VALID:   {len(results['valid']):>2} (eligible for --send)")
+    print(f"  • INVALID: {len(results['invalid']):>2} (550 / NoSuchUser / bad syntax / no MX)")
+    print(f"  • UNKNOWN: {len(results['unknown']):>2} (timeouts / greylisting / policy blocks)")
+    print("-" * 75)
+
+    if results["valid"]:
+        print("\n✅ VALID LEADS (Eligible for live send):")
+        for l, r in results["valid"]:
+            print(f"   - {l.get('business_name')} <{l.get('email')}> | {r}")
+
+    if results["invalid"]:
+        print("\n❌ INVALID LEADS (Ineligible for live send):")
+        for l, r in results["invalid"]:
+            print(f"   - {l.get('business_name')} <{l.get('email')}> | Reason: {r}")
+
+    if results["unknown"]:
+        print("\n⚠️  UNKNOWN LEADS (Ineligible for live send until resolved):")
+        for l, r in results["unknown"]:
+            print(f"   - {l.get('business_name')} <{l.get('email')}> | Reason: {r}")
+
+    print("\n" + "=" * 75)
+    print("STATUS SAFETY CHECK: All lead statuses remain unchanged (status == 'new').")
+    print(f"Updated 'verification' column in {filepath}.")
+    print("=" * 75 + "\n")
+
+    return results
+
+def import_leads_command(filepath, target_filepath=None):
+    """
+    Import leads from an external CSV file into leads.csv.
+    Automatically skips education and school leads (coaching segment, .edu/.ac domains, schools/colleges).
+    Enforces deduplication against target leads, outreach_log.csv, and global suppression.
+    """
+    if not filepath or not os.path.exists(filepath):
+        print(f"[ERROR] Import file '{filepath}' does not exist.")
+        return 0
+
+    if target_filepath is None:
+        target_filepath = LEADS_CSV
+
+    print(f"\n[IMPORT] Importing leads from '{filepath}' into '{target_filepath}'...")
+    import_rows = load_leads(filepath)
+    if not import_rows:
+        print("[INFO] No leads found in source file.")
+        return 0
+
+    existing_leads = load_leads(target_filepath)
+    suppressed_emails = get_global_suppressed_emails()
+    outreach_log_entries = load_outreach_log()
+    outreach_log_leads = [{"email": e.get("recipient_email", ""), "website": ""} for e in outreach_log_entries if e.get("recipient_email")]
+    suppressed_leads = [{"email": em, "website": ""} for em in suppressed_emails if em]
+    dedup_pool = existing_leads + outreach_log_leads + suppressed_leads
+
+    imported = []
+    skipped_edu = []
+    skipped_dup = []
+
+    for r in import_rows:
+        em = normalize_email(r.get("email", ""))
+        site = r.get("website", "")
+        biz = r.get("business_name", "")
+
+        # 1. Skip education and school leads automatically
+        is_edu, edu_reason = is_educational_lead(r)
+        if is_edu:
+            skipped_edu.append((biz, em, edu_reason))
+            continue
+
+        # 2. Skip duplicates
+        if is_duplicate_lead(em, site, dedup_pool + imported):
+            skipped_dup.append((biz, em, "duplicate in leads.csv / outreach_log / suppression"))
+            continue
+
+        new_row = dict(r)
+        if "verification" not in new_row:
+            new_row["verification"] = ""
+        imported.append(new_row)
+
+    if imported:
+        save_leads(existing_leads + imported, target_filepath)
+        print(f"[SUCCESS] Imported {len(imported)} new leads into {target_filepath}.")
+    else:
+        print("[INFO] No eligible leads imported.")
+
+    print(f"  • Skipped educational/school leads: {len(skipped_edu)}")
+    for b, e, reas in skipped_edu[:5]:
+        print(f"    - {b} <{e}>: {reas}")
+    if len(skipped_edu) > 5:
+        print(f"    ... and {len(skipped_edu) - 5} more")
+
+    print(f"  • Skipped duplicates: {len(skipped_dup)}")
+    return len(imported)
+
 def audit_leads_segment(filepath=None):
     """
     Re-run segment classification on every lead in leads.csv.
@@ -1632,7 +2047,8 @@ def is_duplicate_lead(email, website, existing_leads):
         if clean_email and existing_email and clean_email == existing_email:
             return True
         if lead_domain and existing_domain and lead_domain == existing_domain:
-            return True
+            if lead_domain not in FREE_EMAIL_DOMAINS and existing_domain not in FREE_EMAIL_DOMAINS:
+                return True
 
     return False
 
@@ -1757,17 +2173,22 @@ def find_leads_for_segment(segment, area_name="Indiranagar", limit=10):
     Search and source verified leads for a given segment in Bengaluru.
     Enforces location verification, segment text confirmation, chain exclusions, and MX checks.
     """
-    if segment not in SEGMENT_TAG_MAP:
-        raise ValueError(f"Unknown segment: {segment}. Choose from: {', '.join(SEGMENTS)}")
+    if segment not in ALLOWED_TARGET_SEGMENTS:
+        raise ValueError(f"Segment '{segment}' is excluded. Allowed target segments are: {', '.join(ALLOWED_TARGET_SEGMENTS)}")
 
     print(f"\n[LEAD DISCOVERY] Searching for '{segment}' near '{area_name}'...")
     lat, lon = geocode_bengaluru_area(area_name)
-    tags = SEGMENT_TAG_MAP[segment]
+    tags = SEGMENT_TAG_MAP.get(segment, [])
 
     elements = query_overpass_businesses(tags, lat, lon, radius_m=4500)
     print(f"  Found {len(elements)} raw places in OpenStreetMap.")
 
     existing_leads = load_leads()
+    suppressed_emails = get_global_suppressed_emails()
+    outreach_log_entries = load_outreach_log()
+    outreach_log_leads = [{"email": e.get("recipient_email", ""), "website": ""} for e in outreach_log_entries if e.get("recipient_email")]
+    suppressed_leads = [{"email": em, "website": ""} for em in suppressed_emails if em]
+    dedup_pool = existing_leads + outreach_log_leads + suppressed_leads
     new_leads = []
 
     for el in elements:
@@ -1812,8 +2233,14 @@ def find_leads_for_segment(segment, area_name="Indiranagar", limit=10):
         if is_excluded_corporate_inbox(target_email):
             continue
 
+        # Skip educational institutions and domains
+        cand_lead = {"segment": segment, "email": target_email, "website": raw_site, "business_name": biz_name}
+        is_edu, _ = is_educational_lead(cand_lead)
+        if is_edu:
+            continue
+
         # Step C: Deduplication check
-        if is_duplicate_lead(target_email, raw_site, existing_leads + new_leads):
+        if is_duplicate_lead(target_email, raw_site, dedup_pool + new_leads):
             continue
 
         # Step D: Location check & domain review check
@@ -1849,6 +2276,11 @@ def find_leads_for_segment(segment, area_name="Indiranagar", limit=10):
             "status": status_val,
             "last_contacted": "",
             "website_detail": detail,
+            "phone": "",
+            "whatsapp": "",
+            "channel": "",
+            "manual_status": "",
+            "verification": "",
         }
         new_leads.append(new_lead)
         print(f"  + Added: {biz_name} | {assigned_segment} | {target_email} | Loc: {'PASS' if loc_ok else 'REJECT'}")
@@ -1881,14 +2313,14 @@ SUBJECT_VARIANTS = {
         "Stop managing clinic schedules on spreadsheets",
     ],
     "retail": [
-        "Cut stockouts with one sales dashboard",
-        "Automate inventory and store sales tracking",
-        "Reconcile multichannel retail sales in minutes",
+        "question about your store inventory sheets",
+        "quick question on your sales tracking",
+        "question about your retail stock sheets",
     ],
     "agencies": [
-        "Automate client ad reporting in minutes",
-        "Stop building manual ROAS client reports",
-        "Client campaign metrics on one dashboard",
+        "question about your client roas reports",
+        "quick question on your campaign reporting",
+        "question about your client reporting sheets",
     ],
     "accounting": [
         "Track client GST deadlines without spreadsheets",
@@ -1896,9 +2328,9 @@ SUBJECT_VARIANTS = {
         "Cut hours spent on client reconciliations",
     ],
     "manufacturers": [
-        "Track production and inventory bottlenecks daily",
-        "Automated factory floor and dispatch logs",
-        "Stop tracking material inventory on spreadsheets",
+        "question about your dispatch sheets",
+        "question about your factory floor sheets",
+        "quick question on your production tracking",
     ],
     "coaching": [
         "Track fee installments and batch attendance",
@@ -1906,6 +2338,23 @@ SUBJECT_VARIANTS = {
         "Automated student fee and attendance dashboard",
     ],
 }
+
+NEW_SEGMENT_TEMPLATES = {
+    "manufacturers": {
+        "what_i_do": "I turn raw production logs, material inventory sheets, and dispatch schedules into clean, automated trackers.",
+        "question": "How are you currently tracking your daily production and dispatch schedules, and how much time does that take?",
+    },
+    "retail": {
+        "what_i_do": "I turn daily store sales, stock registers, and inventory sheets into simple, automated trackers.",
+        "question": "How does your team currently reconcile inventory across store sales, and how long does that usually take?",
+    },
+    "agencies": {
+        "what_i_do": "I turn ad platform exports and campaign metrics into clean, automated client performance dashboards.",
+        "question": "How are you currently pulling ad performance numbers for client reports, and how much time does that take each week?",
+    },
+}
+
+OFFER_TEXT = "I'd love to build a free sample tracker using one of your current sheets (feel free to remove any sensitive columns), with no commitment."
 
 FOLLOWUP_SUBJECT_VARIANTS = [
     "Following up on data dashboard",
@@ -2023,6 +2472,20 @@ def generate_email(lead, email_type="initial", original_subject=None, message_id
             f"If it's not relevant, no worries. I won't email again."
         )
         body_limit = 70
+    elif segment in NEW_SEGMENT_TEMPLATES:
+        greeting = get_initial_greeting(lead)
+        intro = get_intro_sentence()
+        t_copy = NEW_SEGMENT_TEMPLATES[segment]
+        subject = get_rotated_subject(segment, email, email_type="initial")
+
+        body_main = (
+            f"{greeting}\n\n"
+            f"{intro}\n\n"
+            f"{t_copy['what_i_do']}\n\n"
+            f"{t_copy['question']}\n\n"
+            f"{OFFER_TEXT}"
+        )
+        body_limit = 90
     else:
         subject = get_rotated_subject(segment, email, email_type="initial")
         sample_url = os.environ.get("SAMPLE_DASHBOARD_URL", "").strip()
@@ -2096,6 +2559,17 @@ def generate_html_email(
             f"<p style=\"margin: 0 0 16px 0;\">Following up on my earlier note. In short: I turn messy {html_lib.escape(seg_noun)} data into simple dashboards and reports, at a fixed price, with a first version in about 3 days.</p>",
             f"<p style=\"margin: 0 0 16px 0;\">If it's useful, I can make a free sample using dummy data. Just reply 'yes'.</p>",
             f"<p style=\"margin: 0 0 24px 0;\">If it's not relevant, no worries. I won't email again.</p>",
+        ]
+    elif segment in NEW_SEGMENT_TEMPLATES:
+        greeting = get_initial_greeting(lead)
+        intro = get_intro_sentence()
+        t_copy = NEW_SEGMENT_TEMPLATES[segment]
+        content_paragraphs = [
+            f"<p style=\"margin: 0 0 16px 0;\">{html_lib.escape(greeting)}</p>",
+            f"<p style=\"margin: 0 0 16px 0;\">{html_lib.escape(intro)}</p>",
+            f"<p style=\"margin: 0 0 16px 0;\">{html_lib.escape(t_copy['what_i_do'])}</p>",
+            f"<p style=\"margin: 0 0 16px 0;\">{html_lib.escape(t_copy['question'])}</p>",
+            f"<p style=\"margin: 0 0 24px 0;\">{html_lib.escape(OFFER_TEXT)}</p>",
         ]
     else:
         copy = SEGMENT_COPY.get(segment, SEGMENT_COPY["gyms"])
@@ -2524,6 +2998,15 @@ def send_smtp_email(
     references=None,
 ):
     verify_sender_safety(check_urls_live=check_urls_live)
+    if lead is not None:
+        is_edu, edu_reason = is_educational_lead(lead)
+        if is_edu:
+            raise ValueError(f"Send blocked: {edu_reason}")
+    else:
+        to_dom = extract_domain(to_email)
+        if is_educational_domain(to_dom):
+            raise ValueError(f"Send blocked: recipient domain '{to_dom}' ends with educational suffix (.edu.in, .ac.in, .edu, or .ac.*)")
+
     smtp_pass = os.environ.get("SMTP_PASS", "")
     if not smtp_pass:
         raise ValueError("SMTP_PASS is not set in environment (.env or .env.local).")
@@ -2550,7 +3033,7 @@ def send_smtp_email(
         # Load processed images
         logo_data = get_processed_image("sheetbolt_logo.png", max_width=180)
         dash_data = None
-        if email_type != "followup":
+        if email_type != "followup" and (lead is None or lead.get("segment") not in NEW_SEGMENT_TEMPLATES):
             dash_data = get_processed_image("sample_dashboard.png", max_width=560)
 
         cid_logo = "sheetbolt_logo" if logo_data else None
@@ -2629,7 +3112,7 @@ def save_preview_draft(lead, subject, body, email_type="initial", in_reply_to=No
     # Images
     logo_data = get_processed_image("sheetbolt_logo.png", max_width=180)
     dash_data = None
-    if email_type != "followup":
+    if email_type != "followup" and lead.get("segment") not in NEW_SEGMENT_TEMPLATES:
         dash_data = get_processed_image("sample_dashboard.png", max_width=560)
 
     images_included = []
@@ -2658,7 +3141,7 @@ def save_preview_draft(lead, subject, body, email_type="initial", in_reply_to=No
         f.write(f"SUBJECT: {subject} ({count_words(subject)} words)\n")
         if in_reply_to_line:
             f.write(in_reply_to_line)
-        if sample_url and email_type != "followup":
+        if sample_url and email_type != "followup" and lead.get("segment") not in NEW_SEGMENT_TEMPLATES:
             f.write(f"SAMPLE LINK: {sample_url}\n")
         f.write(f"INCLUDED IMAGES: {images_str}\n")
         f.write(f"BODY ({count_words(body_only)} words - limit < {body_limit}):\n")
@@ -2738,7 +3221,8 @@ def run_test_send(dry_run=False):
     print(f"SEGMENT:                  {lead.get('segment')}")
     print(f"SAMPLE LINK:              {sample_url}")
     print(f"INCLUDED IMAGES:          {', '.join(images_included) if images_included else 'None'}")
-    print(f"WORD COUNT (body only):   {count_words(body.split('Best,\n')[0].strip())} words (Limit: < 90)")
+    body_only = body.split("Best,\n")[0].strip()
+    print(f"WORD COUNT (body only):   {count_words(body_only)} words (Limit: < 90)")
     print(f"TARGET TEST RECIPIENT(S): {', '.join(recipients)}")
     print("-" * 60)
     print(body)
@@ -2832,7 +3316,8 @@ def run_test_followup(dry_run=False):
         print(f"REFERENCES:               {references or 'None'}")
         print(f"SEGMENT:                  {lead.get('segment')}")
         print(f"INCLUDED IMAGES:          {', '.join(images_included) if images_included else 'None'}")
-        print(f"WORD COUNT:               {count_words(body.split('Best,\n')[0].strip())} words (Limit: < 70)")
+        body_only = body.split("Best,\n")[0].strip()
+        print(f"WORD COUNT:               {count_words(body_only)} words (Limit: < 70)")
         print(f"TARGET TEST RECIPIENT(S): {r}")
         print("-" * 60)
         print(body)
@@ -2949,9 +3434,10 @@ def get_global_suppressed_emails(log_filepath=OUTREACH_LOG_CSV):
     Collect all bounced and unsubscribed email addresses across:
     1. outreach_log.csv (status in ['bounced', 'unsubscribed'])
     2. All lead CSV files in directory (leads*.csv)
+    3. Permanent bounced suppression list (BOUNCED_SUPPRESSION_EMAILS)
     Returns set of lowercase normalized email addresses.
     """
-    suppressed = set()
+    suppressed = set(normalize_email(em) for em in BOUNCED_SUPPRESSION_EMAILS if em)
     entries = load_outreach_log(log_filepath)
     for e in entries:
         st = (e.get("status") or "").lower()
@@ -2974,7 +3460,7 @@ def get_global_suppressed_emails(log_filepath=OUTREACH_LOG_CSV):
             pass
     return suppressed
 
-def get_eligible_leads(leads, followup_mode=False, allowed_cities=None, log_filepath=OUTREACH_LOG_CSV, segment_filter=None, today=None):
+def get_eligible_leads(leads, followup_mode=False, allowed_cities=None, log_filepath=OUTREACH_LOG_CSV, segment_filter=None, today=None, require_verified=False):
     """
     Filter leads to only those eligible for outreach:
     - Send and dry-run only pick leads with status == 'new' AND segment != 'unclassified'
@@ -2984,6 +3470,7 @@ def get_eligible_leads(leads, followup_mode=False, allowed_cities=None, log_file
     - Must pass location verification.
     - Must not be flagged by domain match check.
     - Must not be bounced or unsubscribed anywhere (global cross-CSV suppression).
+    - If require_verified is True, leads with status 'new' must have verification == 'valid'.
     """
     if allowed_cities is None:
         allowed_cities = get_allowed_cities()
@@ -3010,11 +3497,20 @@ def get_eligible_leads(leads, followup_mode=False, allowed_cities=None, log_file
         if segment == "unclassified" or st == "unclassified_hold":
             continue
 
+        # Block sending to excluded segments and educational domains (.edu.in, .ac.in, .edu, .ac.*)
+        is_edu, _ = is_educational_lead(lead)
+        if is_edu:
+            continue
+
         if st in ["unsubscribed", "replied", "bounced", "rejected_location", "review_flagged"]:
             continue
 
         if not followup_mode and st != "new":
             continue
+
+        if require_verified and not followup_mode:
+            if (lead.get("verification") or "").strip().lower() != "valid":
+                continue
 
         biz_name = lead.get("business_name", "")
         website = lead.get("website", "")
@@ -3182,8 +3678,25 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
 
     # Filter eligible leads
     allowed_cities = [] if skip_location_audit else get_allowed_cities()
-    new_eligible_leads = get_eligible_leads(leads, followup_mode=False, allowed_cities=allowed_cities, log_filepath=log_filepath, segment_filter=segment_filter)
-    eligible_leads = get_eligible_leads(leads, followup_mode=followup_mode, allowed_cities=allowed_cities, log_filepath=log_filepath, segment_filter=segment_filter) if followup_mode else new_eligible_leads
+    new_eligible_leads = get_eligible_leads(
+        leads,
+        followup_mode=False,
+        allowed_cities=allowed_cities,
+        log_filepath=log_filepath,
+        segment_filter=segment_filter,
+        require_verified=send_live,
+    )
+    eligible_leads = (
+        get_eligible_leads(
+            leads,
+            followup_mode=True,
+            allowed_cities=allowed_cities,
+            log_filepath=log_filepath,
+            segment_filter=segment_filter,
+        )
+        if followup_mode
+        else new_eligible_leads
+    )
 
     # Print real emailable lead count per segment and in total
     emailable_counts = Counter(l.get("segment", "unknown") for l in new_eligible_leads)
@@ -3205,13 +3718,13 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
         reason_str = (
             "no leads with an initial send >= 4 business days ago without reply/unsubscribe/bounce/prior followup"
             if followup_mode
-            else "after location, segment, chain, and inbox filters"
+            else ("no 'valid' verified leads found; run --verify-leads first" if send_live else "after location, segment, chain, and inbox filters")
         )
         print(f"\n[INFO] No leads eligible for {mode_str} at this time ({reason_str}).")
         return
 
     batch_limit = min(limit or len(eligible_leads), remaining_cap if send_live else (limit or len(eligible_leads)))
-    if not send_live and limit and limit >= 2:
+    if limit and limit >= 2:
         by_seg = {}
         for l in eligible_leads:
             s = l.get("segment", "unknown")
@@ -3228,6 +3741,17 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
                 break
     else:
         target_leads = eligible_leads[:batch_limit]
+
+    if send_live and not followup_mode:
+        unverified = [l for l in target_leads if (l.get("verification") or "").strip().lower() != "valid"]
+        if unverified:
+            print(f"\n[SAFETY GUARD] Skipping {len(unverified)} lead(s) without 'valid' verification status:")
+            for nvl in unverified:
+                print(f"  - {nvl.get('business_name')} ({mask_email(nvl.get('email', ''))}) [verification={nvl.get('verification', 'empty')}]")
+            target_leads = [l for l in target_leads if (l.get("verification") or "").strip().lower() == "valid"]
+            if not target_leads:
+                print("\n[ERROR] No leads in batch have verification == 'valid'. Run --verify-leads first before live sending.")
+                return
 
     print("\n" + "=" * 65)
     print(f"OUTREACH RUN ({'LIVE SENDING' if send_live else 'DRY RUN / PREVIEW'})")
@@ -3249,6 +3773,11 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
     preview_outputs = []
 
     for idx, lead in enumerate(target_leads, 1):
+        is_edu, edu_reason = is_educational_lead(lead)
+        if is_edu:
+            print(f"\n[{idx}/{len(target_leads)}] [SKIP BLOCKED] Skipping {lead.get('business_name')} ({mask_email(lead.get('email', ''))}): {edu_reason}")
+            continue
+
         email_type = "followup" if followup_mode else "initial"
         in_reply_to = None
         references = None
@@ -3387,7 +3916,8 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
         print(f"FROM:           {from_line}")
         print(f"TO:             {mask_email(ld['email'])}")
         print(f"BUSINESS:       {ld['business_name']} ({ld['segment']})")
-        print(f"GREETING:       {get_greeting(ld['business_name'])}")
+        disp_greeting = get_initial_greeting(ld) if (ld.get("segment") in NEW_SEGMENT_TEMPLATES and not followup_mode) else get_greeting(ld["business_name"])
+        print(f"GREETING:       {disp_greeting}")
         print(f"LOCATION CHECK: [PASS] {loc_info}")
         print(f"SEGMENT CHECK:  [PASS] Confirmed {ld['segment']} {matched_str}")
         if followup_mode:
@@ -3397,7 +3927,7 @@ def run_outreach(send_live=False, followup_mode=False, limit=None, force_window=
         if followup_mode:
             print(f"IN-REPLY-TO:    {in_rep or '<placeholder-initial-msgid@sheetboltanalytics.netlify.app>'}")
         print(f"BODY WORDS:     {count_words(body_only)} words (max {body_limit_str})")
-        if not followup_mode:
+        if not followup_mode and ld.get("segment") not in NEW_SEGMENT_TEMPLATES:
             print(f"SAMPLE LINK:    {sample_url}")
         print(f"INCLUDED IMAGES: {', '.join(img_list) if img_list else 'None'}")
         print(f"TEXT DRAFT:     {txt_p}")
@@ -4379,7 +4909,7 @@ def add_manual_lead(business, segment, website, phone="", whatsapp="", email="",
     blocking_leads_files = [lf for lf in leads_files if os.path.basename(lf) != "leads_phone_only.csv"]
 
     # 1. Gather do-not-contact set across all logs and leads
-    dnc_emails = set()
+    dnc_emails = set(normalize_email(em) for em in BOUNCED_SUPPRESSION_EMAILS if em)
     dnc_domains = set()
 
     # Load outreach_log records
@@ -4766,6 +5296,7 @@ def run_preview_only():
 # ----------------- CLI INTERFACE -----------------
 
 def main():
+    global LEADS_CSV
     parser = argparse.ArgumentParser(description="Freelance Data Service Outreach Pipeline for Bengaluru.")
     parser.add_argument("command", nargs="?", default="", help="Subcommand, e.g. 'sync-inbox'.")
     parser.add_argument("--sync-inbox", action="store_true", help="Sync IMAP inbox and unsubscribe requests.")
@@ -4776,7 +5307,7 @@ def main():
     parser.add_argument("--leads-file", type=str, default="leads.csv", help="Path to leads CSV file (default: leads.csv).")
     parser.add_argument("--dry-run", action="store_true", help="Run in simulation mode without sending emails or modifying files.")
     parser.add_argument("--preview-only", "--dry-render", action="store_true", help="Render and display all 7 segment emails without sending.")
-    parser.add_argument("--send", action="store_true", help="Send emails live via Gmail SMTP.")
+    parser.add_argument("--send", "--send-live", dest="send", action="store_true", help="Send emails live via Gmail SMTP.")
     parser.add_argument("--test-send", action="store_true", help="Send first draft strictly to TEST_RECIPIENTS.")
     parser.add_argument("--test-followup", action="store_true", help="Send follow-up as a threaded reply strictly to TEST_RECIPIENTS.")
     parser.add_argument("--followup", action="store_true", help="Process follow-up emails (4 business days after email 1).")
@@ -4810,9 +5341,21 @@ def main():
     parser.add_argument("--source", type=str, help="Source reference for manual-add.")
     parser.add_argument("--manual-report", action="store_true", help="Print manual outreach report.")
     parser.add_argument("--report-phone-leads", action="store_true", help="Print read-only summary report for leads_phone_only.csv.")
-
+    parser.add_argument("--verify-leads", action="store_true", help="Verify leads with status 'new' via syntax, DNS MX lookup, and SMTP RCPT TO handshake.")
+    parser.add_argument("--import-leads", type=str, default=None, help="Import leads from a CSV file into leads.csv, automatically skipping educational and school leads.")
 
     args = parser.parse_args()
+
+    if args.command == "import-leads" or args.import_leads:
+        import_f = args.import_leads if (args.import_leads and args.import_leads is not True) else (args.leads_file or "leads.csv")
+        target_f = args.leads_file if (args.import_leads and args.import_leads != args.leads_file) else LEADS_CSV
+        import_leads_command(filepath=import_f, target_filepath=target_f)
+        return
+
+    if args.command == "verify-leads" or args.verify_leads:
+        leads_f = args.leads_file or LEADS_CSV
+        verify_leads_command(filepath=leads_f)
+        return
 
     if args.command == "report-phone-leads" or args.report_phone_leads:
         phone_f = args.leads_file if args.leads_file and "phone" in args.leads_file else "leads_phone_only.csv"
@@ -4883,7 +5426,6 @@ def main():
         reset_circuit_breaker(justification)
         return
 
-    global LEADS_CSV
     if args.leads_file:
         LEADS_CSV = args.leads_file
 

@@ -1,0 +1,166 @@
+{
+  "manifest_version": "1.0.0",
+  "generated_at": "2026-10-09T10:45:00+05:30",
+  "environment": {
+    "os": "Windows 11 (AMD64)",
+    "antigravity_edition": "Antigravity 2.0 Desktop / IDE v2.18.1.0",
+    "python_version": "Python 3.14.2",
+    "node_version": "v24.11.1",
+    "git_version": "2.52.0.windows.1"
+  },
+  "upstream_sources": {
+    "khasky/awesome-agent-skills": {
+      "repo": "https://github.com/khasky/awesome-agent-skills",
+      "commit": "2606c7c20acb0ac67392d470b8c31d15947ae7e8",
+      "license": "MIT",
+      "audited": true,
+      "audit_notes": "All markdown and references inspected. Zero obfuscated scripts or destructive payloads."
+    },
+    "anthropics/skills": {
+      "repo": "https://github.com/anthropics/skills",
+      "commit": "683bc88e56f3e09ba94f7055977f3d3aa499f202",
+      "license": "Proprietary/Open Spec",
+      "audited": true,
+      "audit_notes": "Audited xlsx formulas and openpyxl/pandas automation guidelines."
+    },
+    "google/skills": {
+      "repo": "https://github.com/google/skills",
+      "commit": "5120a76b675ec95245b0cc692f0ebe90d78f30bc",
+      "license": "Apache-2.0",
+      "audited": true,
+      "audit_notes": "GCP/cloud-specific; core software engineering patterns extracted into technical planning and database reliability."
+    }
+  },
+  "installed_skills": [
+    {
+      "name": "python-engineering",
+      "scope": "global",
+      "location": "C:\\Users\\deepa\\.gemini\\config\\skills\\python-engineering",
+      "source": "curated-core",
+      "purpose": "Modern Python 3.12+ architecture, typing, Pydantic, logging, error handling, profiling",
+      "status": "active"
+    },
+    {
+      "name": "systematic-debugging",
+      "scope": "global",
+      "location": "C:\\Users\\deepa\\.gemini\\config\\skills\\systematic-debugging",
+      "source": "khasky/awesome-agent-skills (awesome-bug-fix, awesome-root-cause)",
+      "purpose": "4-phase systematic debugging: repro harness, 5 Whys, minimal patch, regression verification",
+      "status": "active"
+    },
+    {
+      "name": "testing-engineering",
+      "scope": "global",
+      "location": "C:\\Users\\deepa\\.gemini\\config\\skills\\testing-engineering",
+      "source": "khasky/awesome-agent-skills (awesome-test-writing)",
+      "purpose": "Pytest, integration tests, mock boundaries, fixtures, failure-path and edge-case testing",
+      "status": "active"
+    },
+    {
+      "name": "application-security",
+      "scope": "global",
+      "location": "C:\\Users\\deepa\\.gemini\\config\\skills\\application-security",
+      "source": "khasky/awesome-agent-skills (awesome-security-audit, awesome-leak-audit)",
+      "purpose": "Credential protection, input validation, injection prevention, API/webhook security, vulnerability review",
+      "status": "active"
+    },
+    {
+      "name": "api-design",
+      "scope": "global",
+      "location": "C:\\Users\\deepa\\.gemini\\config\\skills\\api-design",
+      "source": "khasky/awesome-agent-skills (awesome-api-design)",
+      "purpose": "RESTful resource modeling, Pydantic schemas, pagination, idempotency keys, error contracts",
+      "status": "active"
+    },
+    {
+      "name": "spreadsheet-automation",
+      "scope": "global",
+      "location": "C:\\Users\\deepa\\.gemini\\config\\skills\\spreadsheet-automation",
+      "source": "anthropics/skills (xlsx)",
+      "purpose": "Excel openpyxl/pandas automation, dynamic formulas, data cleaning, reconciliation, report generation",
+      "status": "active"
+    },
+    {
+      "name": "database-reliability",
+      "scope": "global",
+      "location": "C:\\Users\\deepa\\.gemini\\config\\skills\\database-reliability",
+      "source": "khasky/awesome-agent-skills (awesome-database-audit)",
+      "purpose": "Schema design, migrations, transaction management, race-condition prevention, indexing, SQL optimization",
+      "status": "active"
+    },
+    {
+      "name": "technical-planning",
+      "scope": "global",
+      "location": "C:\\Users\\deepa\\.gemini\\config\\skills\\technical-planning",
+      "source": "khasky/awesome-agent-skills (awesome-design-doc)",
+      "purpose": "ADRs, technical specs, scale math, pre-mortem analysis, rollout & rollback blueprints",
+      "status": "active"
+    },
+    {
+      "name": "sheetbolt-python-review",
+      "scope": "project",
+      "location": "C:\\Users\\deepa\\OneDrive\\Desktop\\Projects\\Outreach\\.agents\\skills\\sheetbolt-python-review",
+      "source": "project-specific",
+      "purpose": "Code review for Sheetbolt Python modules (outreach_pipeline.py, lead_finder.py, data caches)",
+      "status": "active"
+    },
+    {
+      "name": "sheetbolt-test-engineering",
+      "scope": "project",
+      "location": "C:\\Users\\deepa\\OneDrive\\Desktop\\Projects\\Outreach\\.agents\\skills\\sheetbolt-test-engineering",
+      "source": "project-specific",
+      "purpose": "Test engineering for Sheetbolt location filtering, personalization lines, segments, and SMTP mocks",
+      "status": "active"
+    },
+    {
+      "name": "sheetbolt-security-review",
+      "scope": "project",
+      "location": "C:\\Users\\deepa\\OneDrive\\Desktop\\Projects\\Outreach\\.agents\\skills\\sheetbolt-security-review",
+      "source": "project-specific",
+      "purpose": "Security review for Sheetbolt SMTP credentials, OAuth tokens, email injection risks, dry-run safety gates",
+      "status": "active"
+    },
+    {
+      "name": "sheetbolt-outreach-quality",
+      "scope": "project",
+      "location": "C:\\Users\\deepa\\OneDrive\\Desktop\\Projects\\Outreach\\.agents\\skills\\sheetbolt-outreach-quality",
+      "source": "project-specific",
+      "purpose": "Quality review for cold outreach copy (<8 word subjects), objective personalization, duplicate prevention, CTA compliance",
+      "status": "active"
+    },
+    {
+      "name": "sheetbolt-release-check",
+      "scope": "project",
+      "location": "C:\\Users\\deepa\\OneDrive\\Desktop\\Projects\\Outreach\\.agents\\skills\\sheetbolt-release-check",
+      "source": "project-specific",
+      "purpose": "Pre-release pre-flight checklist for Sheetbolt outreach batches, tests, dry-runs, and volume gates",
+      "status": "active"
+    }
+  ],
+  "rulesets": [
+    {
+      "path": "C:\\Users\\deepa\\.gemini\\GEMINI.md",
+      "scope": "global",
+      "rule_count": 16,
+      "status": "active"
+    },
+    {
+      "path": "C:\\Users\\deepa\\.gemini\\config\\GEMINI.md",
+      "scope": "global-sync",
+      "rule_count": 16,
+      "status": "active"
+    },
+    {
+      "path": "C:\\Users\\deepa\\OneDrive\\Desktop\\Projects\\Outreach\\AGENTS.md",
+      "scope": "project-sheetbolt",
+      "status": "active"
+    },
+    {
+      "path": "C:\\Users\\deepa\\OneDrive\\Desktop\\Projects\\syn_data\\AGENTS.md",
+      "scope": "project-syndata",
+      "status": "active"
+    }
+  ],
+  "backup_location": "C:\\Users\\deepa\\.gemini\\config\\backups_20261009",
+  "rollback_procedure": "To roll back to previous state, delete C:\\Users\\deepa\\.gemini\\config\\skills, copy backups from C:\\Users\\deepa\\.gemini\\config\\backups_20261009 to their original locations, and remove .agents/skills directories in project folders."
+}
