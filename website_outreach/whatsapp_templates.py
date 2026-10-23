@@ -18,44 +18,44 @@ except ImportError:
 
 WHATSAPP_PITCHES: Dict[str, str] = {
     "agency": (
-        "Hi {business_name} team! Came across your profile and noticed you don't have a live website "
-        "for your portfolio yet. I build high-converting, modern websites for agencies and consultants. "
-        "I put together a quick 1-page preview concept for {clean_name}—would you like me to send over the link?"
+        "Hi! Came across {clean_name}{area_str} and noticed you guys don't have an active website "
+        "for your portfolio yet. I put together a quick 1-page agency layout for you—open to checking out the preview link?"
     ),
     "clinic": (
-        "Hi {business_name} team! I noticed patients searching for you online don't have an official site "
-        "to check your timings, specialties, or book appointments. I build clean, fast clinic websites "
-        "with instant WhatsApp booking. Put together a free sample layout for {clean_name}—may I share the link?"
+        "Hi! Came across {clean_name} on Google Maps{area_str}. Noticed you don't have a website yet "
+        "for patient timings & appointments. Put together a quick 1-page mobile layout for your clinic—can I share the link?"
+    ),
+    "dentist": (
+        "Hi! Came across {clean_name} on Google Maps{area_str}. Noticed you don't have a website yet "
+        "for patient bookings & consultation timings. Put together a quick 1-page mobile layout for your dental clinic—can I send the preview link?"
+    ),
+    "dentists": (
+        "Hi! Came across {clean_name} on Google Maps{area_str}. Noticed you don't have a website yet "
+        "for patient bookings & consultation timings. Put together a quick 1-page mobile layout for your dental clinic—can I send the preview link?"
     ),
     "gym": (
-        "Hi {business_name} team! Noticed your fitness center doesn't have a modern website to showcase "
-        "membership packages and training schedules. I design sleek, mobile-friendly gym sites. "
-        "I drafted a quick demo concept for {clean_name}—open to seeing the preview?"
+        "Hi! Came across {clean_name} on Google Maps{area_str}. Noticed you don't have a website yet "
+        "for membership plans & schedules. Put together a quick mobile layout for your gym—can I send the link?"
     ),
     "salon": (
-        "Hi {business_name} team! Noticed you don't have an online service menu or booking page for your salon yet. "
-        "I create elegant, fast-loading websites that make it easy for clients to view services and book slots. "
-        "Built a quick concept for {clean_name}—would you like to see it?"
+        "Hi! Came across {clean_name} on Google Maps{area_str}. Noticed you guys don't have a website yet "
+        "for your service menu & bookings. Made a quick 1-page mobile layout for you—would you like to see the preview link?"
     ),
     "restaurant": (
-        "Hi {business_name} team! Customers looking for your menu online currently don't see an official site. "
-        "I build fast, mobile-optimized menu & inquiry websites for local eateries. "
-        "Put together a quick preview for {clean_name}—shall I send over the link?"
+        "Hi! Came across {clean_name} on Google Maps{area_str}. Noticed you don't have a website yet "
+        "for your menu & inquiries. Put together a quick mobile layout for you—can I send the preview link?"
     ),
     "accounting": (
-        "Hi {business_name} team! Noticed your firm doesn't have an official website to outline your accounting "
-        "& advisory services. I build trustworthy, professional websites for CA & consulting firms. "
-        "I drafted a quick sample layout for {clean_name}—would you like to check it out?"
+        "Hi! Came across {clean_name}{area_str} and noticed you don't have a dedicated website yet "
+        "for your advisory & tax services. Put together a quick 1-page layout for your firm—can I send the preview link?"
     ),
     "retail": (
-        "Hi {business_name} team! Came across your business and noticed you don't have an online catalog or website yet. "
-        "I build simple, modern websites that help local stores showcase their products and take direct inquiries. "
-        "Put together a quick preview for {clean_name}—can I send the link?"
+        "Hi! Came across {clean_name} on Google Maps{area_str}. Noticed you don't have a website yet "
+        "for your catalog & customer inquiries. Put together a quick 1-page mobile layout for you—can I send the link?"
     ),
     "general": (
-        "Hi {business_name} team! Came across your business and noticed you don't have an official website yet. "
-        "I build clean, fast, mobile-friendly websites that help businesses get found on Google and get more customer calls. "
-        "I put together a quick preview layout for {clean_name}—would you like to see the link?"
+        "Hi! Came across {clean_name} on Google Maps{area_str}. Noticed you don't have an active website yet "
+        "for customer inquiries. Put together a quick 1-page mobile layout for you—can I send over the link?"
     ),
 }
 
@@ -110,11 +110,13 @@ def normalize_phone_number(raw_phone: str, default_country: str = "IN") -> str:
     return digits
 
 
-def get_whatsapp_message(business_name: str, segment: str = "general") -> str:
+def get_whatsapp_message(business_name: str, segment: str = "general", area: str = "") -> str:
     """Returns a personalized WhatsApp outreach message tailored to the business and segment."""
     clean_name = clean_business_name_for_msg(business_name)
+    area_clean = area.split(",")[0].strip() if area else ""
+    area_str = f" in {area_clean}" if area_clean else ""
     template = WHATSAPP_PITCHES.get(segment.lower(), WHATSAPP_PITCHES["general"])
-    return template.format(business_name=business_name, clean_name=clean_name)
+    return template.format(business_name=business_name, clean_name=clean_name, area_str=area_str)
 
 
 def generate_wa_link(phone: str, message: str, default_country: str = "IN") -> str:
@@ -194,6 +196,7 @@ def export_whatsapp_leads(leads: List[Dict[str, Any]], output_filepath: str, def
     
     count = 0
     landline_rows = []
+    seen_phones = set()
     
     with open(output_filepath, "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -203,8 +206,9 @@ def export_whatsapp_leads(leads: List[Dict[str, Any]], output_filepath: str, def
             if not raw_phone:
                 continue
             norm_phone = normalize_phone_number(raw_phone, default_country=default_country)
-            if not norm_phone:
+            if not norm_phone or norm_phone in seen_phones:
                 continue
+            seen_phones.add(norm_phone)
                 
             seg = lead.get("segment", "general")
             biz_name = lead.get("business_name", "").strip()
@@ -222,7 +226,7 @@ def export_whatsapp_leads(leads: List[Dict[str, Any]], output_filepath: str, def
                 })
                 continue
                 
-            msg = get_whatsapp_message(biz_name, seg)
+            msg = get_whatsapp_message(biz_name, seg, area=area)
             wa_link = generate_wa_link(norm_phone, msg, default_country=default_country)
             
             writer.writerow({
