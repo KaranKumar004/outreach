@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lumière Luxury Salon & Spa — Bengaluru</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold: #d97706;
+      --gold-dark: #b45309;
+      --gold-light: #fef3c7;
+      --dark: #18181b;
+      --dark-card: #27272a;
+      --gray-400: #a1a1aa;
+      --white: #ffffff;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    body {
+      background-color: #09090b;
+      color: #f4f4f5;
+      padding-bottom: 90px;
+      line-height: 1.5;
+    }
+    .serif {
+      font-family: 'Playfair Display', Georgia, serif;
+    }
+    /* Demo Header */
+    .demo-bar {
+      background: #18181b;
+      color: #a1a1aa;
+      font-size: 13px;
+      padding: 8px 16px;
+      text-align: center;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid #27272a;
+    }
+    .demo-pill {
+      background: #f59e0b;
+      color: #18181b;
+      font-weight: 700;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+    }
+
+    header {
+      padding: 18px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #27272a;
+    }
+    .brand h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #fafafa;
+    }
+    .brand p {
+      font-size: 12px;
+      color: var(--gray-400);
+    }
+    .call-btn {
+      background: #27272a;
+      color: #f4f4f5;
+      padding: 8px 14px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid #3f3f46;
+    }
+
+    /* Hero */
+    .hero {
+      padding: 32px 20px;
+      text-align: left;
+      background: radial-gradient(circle at top right, #27272a 0%, #09090b 70%);
+    }
+    .badge-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: #27272a;
+      color: #fbbf24;
+      border: 1px solid #3f3f46;
+    }
+    .hero h2 {
+      font-size: 28px;
+      line-height: 1.2;
+      color: #fafafa;
+      margin-bottom: 12px;
+    }
+    .hero p {
+      font-size: 15px;
+      color: #a1a1aa;
+      margin-bottom: 22px;
+    }
+    .hero-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #25d366;
+      color: #09090b;
+      padding: 14px 22px;
+      border-radius: 12px;
+      font-weight: 800;
+      font-size: 15px;
+      text-decoration: none;
+    }
+
+    /* Services Menu */
+    .section-title {
+      padding: 20px 20px 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .section-title h3 {
+      font-size: 18px;
+      color: #fafafa;
+    }
+    .menu-grid {
+      padding: 0 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .menu-card {
+      background: #18181b;
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid #27272a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .menu-card h5 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fafafa;
+      margin-bottom: 4px;
+    }
+    .menu-card p {
+      font-size: 13px;
+      color: #a1a1aa;
+    }
+    .menu-price {
+      text-align: right;
+    }
+    .menu-price .price {
+      font-size: 16px;
+      font-weight: 800;
+      color: #f59e0b;
+    }
+    .menu-price span {
+      font-size: 11px;
+      color: #34d399;
+      font-weight: 700;
+      display: block;
+    }
+
+    /* Sticky Mobile Booking */
+    .sticky-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #18181b;
+      padding: 14px 20px;
+      border-top: 1px solid #27272a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 50;
+    }
+    .sticky-bar p {
+      font-size: 13px;
+      color: #a1a1aa;
+    }
+    .sticky-bar strong {
+      display: block;
+      color: #fafafa;
+      font-size: 14px;
+    }
+    .sticky-cta {
+      background: #25d366;
+      color: #09090b;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-weight: 800;
+      font-size: 14px;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="demo-bar">
+    <span class="demo-pill">Live Preview</span>
+    <span>Ready in 3 Days • Mobile Optimized</span>
+  </div>
+
+  <header>
+    <div class="brand">
+      <h1 class="serif">LUMIÈRE SALON & SPA</h1>
+      <p>Indiranagar, Bengaluru</p>
+    </div>
+    <a href="tel:+919876543210" class="call-btn">📞 Call</a>
+  </header>
+
+  <section class="hero">
+    <div class="badge-row">
+      <div class="badge">⭐ 4.9 (210 Reviews)</div>
+      <div class="badge">Open until 9 PM</div>
+    </div>
+    <h2 class="serif">Bespoke Hair & Wellness in Indiranagar</h2>
+    <p>Premium balayage, keratin smoothing, hydra-facials, and relaxing aromatherapy rituals.</p>
+    <a href="https://wa.me/919986835830?text=Hi%20Lumiere%20Salon%2C%20I%20would%20like%20to%20book%20a%20slot" class="hero-btn">
+      <span>💬 Book on WhatsApp</span>
+    </a>
+  </section>
+
+  <div class="section-title">
+    <h3 class="serif">Popular Services</h3>
+    <span style="font-size:12px;color:#a1a1aa;">Direct WhatsApp Confirmation</span>
+  </div>
+
+  <div class="menu-grid">
+    <div class="menu-card">
+      <div>
+        <h5>Signature Balayage & Blowdry</h5>
+        <p>Custom hand-painted color + hair spa</p>
+      </div>
+      <div class="menu-price">
+        <div class="price">₹4,499</div>
+        <span>Book Slot</span>
+      </div>
+    </div>
+
+    <div class="menu-card">
+      <div>
+        <h5>Deep Hydra-Facial Glow</h5>
+        <p>60-min ultrasonic pore extraction & serum infusion</p>
+      </div>
+      <div class="menu-price">
+        <div class="price">₹2,499</div>
+        <span>Book Slot</span>
+      </div>
+    </div>
+
+    <div class="menu-card">
+      <div>
+        <h5>Brazilian Keratin Smoothing</h5>
+        <p>Zero frizz for 4+ months, formaldehyde-free</p>
+      </div>
+      <div class="menu-price">
+        <div class="price">₹5,999</div>
+        <span>Book Slot</span>
+      </div>
+    </div>
+
+    <div class="menu-card">
+      <div>
+        <h5>Swedish Aromatherapy Massage</h5>
+        <p>Full body deep tissue with organic essential oils</p>
+      </div>
+      <div class="menu-price">
+        <div class="price">₹1,999</div>
+        <span>Book Slot</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="sticky-bar">
+    <div>
+      <p>Today's Slots</p>
+      <strong>Available from 3:00 PM</strong>
+    </div>
+    <a href="https://wa.me/919986835830?text=Hi%20Lumiere%20Salon%2C%20I%20would%20like%20to%20book%20a%20slot" class="sticky-cta">
+      <span>💬 Book WhatsApp</span>
+    </a>
+  </div>
+
+</body>
+</html>

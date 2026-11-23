@@ -1,0 +1,1203 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Mile High Heating & Air | Denver, CO â€¢ 24/7 Emergency HVAC & History</title>
+  <meta name="description" content="Est. 2010 in Denver, CO. 24/7 Emergency furnace repair, $89 diagnostic (waived with repair), free 2nd opinions on heat exchangers. Call (303) 578-2910.">
+
+  <!-- OpenGraph Metadata -->
+  <meta property="og:title" content="Mile High Heating & Air | Denver, CO">
+  <meta property="og:description" content="16 years of honest emergency heating & air across Denver Metro & Foothills. 45-minute response time.">
+  <meta property="og:image" content="assets/hvac_hero.jpg">
+  <meta property="og:type" content="website">
+
+  <!-- Google Fonts: Plus Jakarta Sans & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- JSON-LD Local Business Schema for Local Pack SEO -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "HVACBusiness",
+    "name": "Mile High Heating & Air Solutions LLC",
+    "founder": "Brett Callahan",
+    "foundingDate": "2010",
+    "image": "assets/hvac_hero.jpg",
+    "telephone": "(303) 578-2910",
+    "email": "dispatch@milehighheatingair.com",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "4890 W 38th Ave",
+      "addressLocality": "Denver",
+      "addressRegion": "CO",
+      "postalCode": "80212",
+      "addressCountry": "US"
+    },
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": 39.7695,
+      "longitude": -105.0503
+    },
+    "openingHoursSpecification": [
+      {
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+        "opens": "00:00",
+        "closes": "23:59"
+      }
+    ],
+    "priceRange": "$$"
+  }
+  </script>
+
+  <style>
+    :root {
+      /* 4-Color Luxury Architectural Palette (No Sterile White, No Bright/Garish Neons) */
+      --obsidian-steel: #0f172a;       /* Color 1: Deep Charcoal / Industrial Steel */
+      --steel-subtle: #1e293b;
+      --hearth-copper: #b45309;        /* Color 2: Burnished Copper / Radiant Hearth Amber */
+      --copper-light: #fef3c7;
+      --alpine-cyan: #0e7490;          /* Color 3: Deep Glacial Alpine Teal */
+      --alpine-light: #e0f2fe;
+      --stone-sand: #ebe7df;           /* Color 4: Warm Colorado Stone / Cashmere Sand */
+      --card-surface: #f5f2ec;
+      --card-border: #ded7cb;
+      --text-dark: #121826;
+      --text-muted: #576275;
+      --emergency-crimson: #b91c1c;
+      --font-heading: 'Outfit', sans-serif;
+      --font-body: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-body);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--stone-sand);
+      color: var(--text-dark);
+      padding-bottom: 95px;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Ambient Subtle Particle Canvas */
+    .ambient-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    /* Main Container */
+    .app-container {
+      position: relative;
+      z-index: 10;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    /* Urgent Emergency Top Banner */
+    .emergency-status-bar {
+      background: var(--obsidian-steel);
+      color: #ffffff;
+      padding: 9px 18px;
+      font-size: 11.5px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pulse-amber {
+      width: 7px;
+      height: 7px;
+      background: var(--hearth-copper);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--hearth-copper);
+      animation: pulseA 1.6s infinite;
+    }
+    @keyframes pulseA {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.4); opacity: 0.4; }
+    }
+
+    /* Primary Navigation Header */
+    header {
+      background: rgba(245, 242, 236, 0.96);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+      padding: 14px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 60;
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-crest {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, var(--obsidian-steel), var(--steel-subtle));
+      border-radius: 12px;
+      border: 1.5px solid var(--hearth-copper);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.2);
+    }
+    .brand-crest svg {
+      width: 24px;
+      height: 24px;
+      fill: none;
+      stroke: var(--hearth-copper);
+      stroke-width: 2.2;
+    }
+    .brand-text h1 {
+      font-family: var(--font-heading);
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--obsidian-steel);
+      line-height: 1.15;
+    }
+    .brand-text p {
+      font-size: 11px;
+      color: var(--hearth-copper);
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    .btn-header-dispatch {
+      background: var(--obsidian-steel);
+      color: #ffffff;
+      font-size: 12.5px;
+      font-weight: 700;
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--hearth-copper);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    /* Multi-Page Navigation Bar */
+    .nav-tabs-wrapper {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+    }
+    .nav-tabs-wrapper::-webkit-scrollbar {
+      display: none;
+    }
+    .nav-tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 7px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+    .nav-tab-btn.active {
+      background: var(--obsidian-steel);
+      color: #ffffff;
+      border-color: var(--obsidian-steel);
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.2);
+    }
+    .nav-tab-btn:hover:not(.active) {
+      color: var(--obsidian-steel);
+      background: rgba(222, 215, 203, 0.4);
+    }
+
+    /* Page Views */
+    .page-view {
+      display: none;
+      animation: fadeInPage 0.25s ease-out;
+    }
+    .page-view.active {
+      display: block;
+    }
+    @keyframes fadeInPage {
+      0% { opacity: 0; transform: translateY(6px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Common Card Styling */
+    .content-card {
+      background: var(--card-surface);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 22px;
+      margin: 18px 20px;
+      box-shadow: 0 8px 20px -8px rgba(15, 23, 42, 0.06);
+    }
+
+    /* PAGE 1: HOME HERO */
+    .home-hero {
+      position: relative;
+      margin: 18px 20px;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 12px 30px -10px rgba(15, 23, 42, 0.2);
+    }
+    .home-hero img {
+      width: 100%;
+      height: 240px;
+      object-fit: cover;
+      display: block;
+    }
+    .home-hero-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.35) 0%, rgba(15, 23, 42, 0.94) 100%);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      color: #ffffff;
+    }
+    .hero-badge-pill {
+      background: var(--hearth-copper);
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 8px;
+      width: fit-content;
+    }
+    .home-hero-overlay h2 {
+      font-family: var(--font-heading);
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.25;
+      margin-bottom: 6px;
+    }
+    .home-hero-overlay p {
+      font-size: 13px;
+      color: #e2e8f0;
+      line-height: 1.45;
+    }
+
+    /* 3D Mascot Banner: Bernie the Pilot Flame */
+    .mascot-banner {
+      background: linear-gradient(135deg, var(--card-surface), var(--alpine-light));
+      border: 1px solid #bae6fd;
+      border-radius: 18px;
+      padding: 16px;
+      margin: 0 20px 18px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(14, 116, 144, 0.08);
+    }
+    .mascot-avatar {
+      width: 76px;
+      height: 76px;
+      flex-shrink: 0;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 2px solid var(--alpine-cyan);
+      box-shadow: 0 4px 12px rgba(14, 116, 144, 0.2);
+    }
+    .mascot-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .mascot-bubble {
+      flex: 1;
+      background: #ffffff;
+      border: 1px solid #7dd3fc;
+      border-radius: 12px;
+      padding: 10px 12px;
+      position: relative;
+    }
+    .mascot-bubble h5 {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--alpine-cyan);
+      margin-bottom: 2px;
+    }
+    .mascot-bubble p {
+      font-size: 12px;
+      color: var(--text-dark);
+      line-height: 1.4;
+    }
+    .mascot-bubble span {
+      font-size: 10px;
+      color: var(--hearth-copper);
+      font-weight: 700;
+      display: block;
+      margin-top: 4px;
+    }
+
+    /* PAGE 2: HISTORY & HERITAGE */
+    .founder-card {
+      background: var(--obsidian-steel);
+      color: #ffffff;
+      border-radius: 18px;
+      padding: 22px;
+      margin: 18px 20px;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.2);
+    }
+    .founder-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .founder-img {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--hearth-copper);
+    }
+    .founder-meta h4 {
+      font-family: var(--font-heading);
+      font-size: 16px;
+      font-weight: 800;
+      color: #ffffff;
+    }
+    .founder-meta span {
+      font-size: 12px;
+      color: var(--hearth-copper);
+      font-weight: 700;
+    }
+    .founder-quote {
+      font-size: 13.5px;
+      color: #cbd5e1;
+      font-style: italic;
+      line-height: 1.6;
+    }
+
+    .timeline-item {
+      position: relative;
+      padding-left: 28px;
+      margin-bottom: 22px;
+    }
+    .timeline-item:last-child {
+      margin-bottom: 0;
+    }
+    .timeline-marker {
+      position: absolute;
+      left: 0;
+      top: 4px;
+      width: 14px;
+      height: 14px;
+      background: var(--hearth-copper);
+      border-radius: 50%;
+      border: 3px solid var(--card-surface);
+      box-shadow: 0 0 0 2px var(--hearth-copper);
+    }
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: 6px;
+      top: 20px;
+      bottom: -16px;
+      width: 2px;
+      background: var(--card-border);
+    }
+    .timeline-item:last-child::before {
+      display: none;
+    }
+    .timeline-year {
+      font-family: var(--font-heading);
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--hearth-copper);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .timeline-title {
+      font-family: var(--font-heading);
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--obsidian-steel);
+      margin: 2px 0 4px 0;
+    }
+    .timeline-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* PAGE 3: RATES & REPLACEMENTS */
+    .repair-row {
+      background: #ffffff;
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+    .repair-row:hover {
+      border-color: var(--hearth-copper);
+      transform: translateX(2px);
+    }
+    .repair-details h5 {
+      font-family: var(--font-heading);
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--obsidian-steel);
+      margin-bottom: 3px;
+    }
+    .repair-details p {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .badge-copper {
+      display: inline-block;
+      margin-top: 5px;
+      font-size: 10px;
+      font-weight: 800;
+      background: var(--copper-light);
+      color: var(--hearth-copper);
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+    .badge-alpine {
+      display: inline-block;
+      margin-top: 5px;
+      font-size: 10px;
+      font-weight: 800;
+      background: var(--alpine-light);
+      color: var(--alpine-cyan);
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+    .repair-price {
+      text-align: right;
+      min-width: 95px;
+    }
+    .price-num {
+      font-family: var(--font-heading);
+      font-size: 17px;
+      font-weight: 900;
+      color: var(--obsidian-steel);
+    }
+    .price-action {
+      font-size: 11px;
+      color: var(--hearth-copper);
+      font-weight: 800;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    /* PAGE 4: URGENT DISPATCH ENGINE */
+    .form-group-custom {
+      margin-bottom: 14px;
+    }
+    .form-group-custom label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 800;
+      color: var(--obsidian-steel);
+      margin-bottom: 6px;
+    }
+    .input-field-custom {
+      width: 100%;
+      padding: 13px 14px;
+      border: 1.5px solid var(--card-border);
+      border-radius: 10px;
+      font-size: 14px;
+      background: #ffffff;
+      color: var(--text-dark);
+      transition: all 0.2s ease;
+    }
+    .input-field-custom:focus {
+      outline: none;
+      border-color: var(--hearth-copper);
+      box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.15);
+    }
+    .btn-submit-dispatch {
+      width: 100%;
+      background: var(--obsidian-steel);
+      color: #ffffff;
+      border: 1px solid var(--hearth-copper);
+      padding: 15px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.25);
+      transition: all 0.2s ease;
+    }
+    .btn-submit-dispatch:hover {
+      background: var(--hearth-copper);
+      transform: translateY(-2px);
+    }
+
+    /* PAGE 5: TERRITORY & CONTACT */
+    .contact-item {
+      background: #ffffff;
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .contact-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--copper-light);
+      color: var(--hearth-copper);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .contact-info h6 {
+      font-family: var(--font-heading);
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--obsidian-steel);
+      margin-bottom: 3px;
+    }
+    .contact-info p {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+
+    /* Modal Confirmation */
+    .dispatch-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(5px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-box {
+      background: #ffffff;
+      border: 1px solid var(--hearth-copper);
+      border-radius: 20px;
+      padding: 28px;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    }
+    .modal-badge {
+      width: 60px;
+      height: 60px;
+      background: var(--copper-light);
+      color: var(--hearth-copper);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 14px auto;
+    }
+
+    /* Sticky Bottom Dock */
+    .sticky-dock {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(15, 23, 42, 0.96);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 11px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 90;
+      color: #ffffff;
+    }
+    .dock-left span:first-child {
+      display: block;
+      font-size: 10.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--hearth-copper);
+    }
+    .dock-left span:last-child {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 800;
+    }
+    .dock-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-dock-call {
+      background: rgba(255,255,255,0.1);
+      color: #ffffff;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .btn-dock-dispatch {
+      background: var(--hearth-copper);
+      color: #ffffff;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 800;
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient Particle Canvas -->
+  <canvas id="particleCanvas" class="ambient-canvas"></canvas>
+
+  <div class="app-container">
+
+    <!-- Emergency Status Bar -->
+    <div class="emergency-status-bar">
+      <div class="status-left">
+        <span class="pulse-amber"></span>
+        <span>Denver Freeze Protocol Active â€¢ On-Call Master Technicians</span>
+      </div>
+      <span style="color:var(--hearth-copper); font-weight:700;">Avg Arrival: 42 Mins</span>
+    </div>
+
+    <!-- Header with Multi-Page Navigation Tabs -->
+    <header>
+      <div class="header-top">
+        <div class="brand-group">
+          <div class="brand-crest">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 2c1.5 3 4 5 4 8a4 4 0 1 1-8 0c0-3 2.5-5 4-8z"/>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <h1>Mile High Heating & Air</h1>
+            <p>Denver, Lakewood, Golden & Morrison, CO</p>
+          </div>
+        </div>
+        <a href="tel:3035782910" class="btn-header-dispatch">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          (303) 578-2910
+        </a>
+      </div>
+
+      <!-- Navigation Tabs (5 Pages) -->
+      <nav class="nav-tabs-wrapper">
+        <button onclick="navigateHvac('home')" id="tab-home" class="nav-tab-btn active">Home</button>
+        <button onclick="navigateHvac('history')" id="tab-history" class="nav-tab-btn">Our Story & History</button>
+        <button onclick="navigateHvac('services')" id="tab-services" class="nav-tab-btn">Rates & Replacements</button>
+        <button onclick="navigateHvac('dispatch')" id="tab-dispatch" class="nav-tab-btn">Rapid Dispatch</button>
+        <button onclick="navigateHvac('contact')" id="tab-contact" class="nav-tab-btn">Service Territory</button>
+      </nav>
+    </header>
+
+    <!-- ========================================== -->
+    <!-- PAGE 1: HOME -->
+    <!-- ========================================== -->
+    <div id="page-home" class="page-view active">
+
+      <!-- Hero Banner -->
+      <div class="home-hero">
+        <img src="assets/hvac_hero.jpg" alt="Warm Denver Mountain Home">
+        <div class="home-hero-overlay">
+          <span class="hero-badge-pill">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1.5 3 4 5 4 8a4 4 0 1 1-8 0c0-3 2.5-5 4-8z"/></svg>
+            $89 Diagnostic (Waived with Repair) â€¢ Free 2nd Opinions
+          </span>
+          <h2>Furnace Stopped Heating? We're On Our Way.</h2>
+          <p>Zero cold nights, zero corporate gouging. Denver's trusted local master technicians arrive with fully stocked trucks to restore your heat immediately.</p>
+        </div>
+      </div>
+
+      <!-- 3D Mascot Banner: Bernie the Pilot Flame -->
+      <div class="mascot-banner" onclick="cycleBernie()">
+        <div class="mascot-avatar">
+          <img src="assets/hvac_mascot.jpg" alt="Bernie the Flame">
+        </div>
+        <div class="mascot-bubble">
+          <h5>Meet Bernie (Practice Mascot)</h5>
+          <p id="bernieText">"Hey Denver! Shivering at 2 AM? Don't stress! Brett and our on-call techs are on the road right now. Tap me for a winter heating tip!"</p>
+          <span>ðŸ”¥ Tap Bernie to hear another tip!</span>
+        </div>
+      </div>
+
+      <!-- 4 Core Standards -->
+      <div class="content-card">
+        <h3 style="font-family:var(--font-heading); font-size:17px; font-weight:800; color:var(--obsidian-steel); margin-bottom:12px;">
+          The Mile High Promise to Denver Homeowners
+        </h3>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div style="background:#ffffff; border:1px solid var(--card-border); padding:12px; border-radius:12px;">
+            <div style="font-size:11px; font-weight:800; color:var(--hearth-copper);">45-MIN ARRIVAL</div>
+            <p style="font-size:12px; color:var(--text-muted);">Dispatched immediately across Denver Metro & Foothills.</p>
+          </div>
+          <div style="background:#ffffff; border:1px solid var(--card-border); padding:12px; border-radius:12px;">
+            <div style="font-size:11px; font-weight:800; color:var(--hearth-copper);">$89 DIAGNOSTIC</div>
+            <p style="font-size:12px; color:var(--text-muted);">100% waived if any repair is approved on the spot.</p>
+          </div>
+          <div style="background:#ffffff; border:1px solid var(--card-border); padding:12px; border-radius:12px;">
+            <div style="font-size:11px; font-weight:800; color:var(--alpine-cyan);">FREE 2ND OPINION</div>
+            <p style="font-size:12px; color:var(--text-muted);">Camera inspection on cracked heat exchangers.</p>
+          </div>
+          <div style="background:#ffffff; border:1px solid var(--card-border); padding:12px; border-radius:12px;">
+            <div style="font-size:11px; font-weight:800; color:var(--alpine-cyan);">0% FINANCING</div>
+            <p style="font-size:12px; color:var(--text-muted);">12 months 0% APR via GreenSky & Synchrony Bank.</p>
+          </div>
+        </div>
+        <div style="margin-top:16px; text-align:center;">
+          <button onclick="navigateHvac('dispatch')" class="btn-submit-dispatch">
+            ðŸš¨ Request Immediate On-Call Dispatch
+          </button>
+        </div>
+      </div>
+
+      <!-- Verified Homeowner Story -->
+      <div class="content-card" style="border-left:4px solid var(--hearth-copper);">
+        <div style="font-size:11px; font-weight:800; color:var(--hearth-copper); text-transform:uppercase; margin-bottom:4px;">
+          Verified Denver Homeowner Story
+        </div>
+        <p style="font-size:13.5px; font-style:italic; color:#334155; line-height:1.6;">
+          "Our furnace shut down on a Saturday night when it was 11 degrees in Lakewood. Another corporate company quoted us $1,200 just to come out Monday morning. Brett arrived in 35 minutes, had the exact blower capacitor in his van, and our heat was blazing 40 minutes later. Truly lifesavers."
+        </p>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:12px; font-weight:800; color:var(--obsidian-steel);">
+          <span>Marcus & Elena K. â€” Lakewood Residents</span>
+          <span style="color:var(--hearth-copper);">â˜…â˜…â˜…â˜…â˜… Google Review</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- PAGE 2: OUR STORY & 16-YEAR HISTORY -->
+    <!-- ========================================== -->
+    <div id="page-history" class="page-view">
+
+      <!-- Founder Card -->
+      <div class="founder-card">
+        <div class="founder-header">
+          <img src="assets/brett_callahan.jpg" alt="Brett Callahan, Master HVAC Tech" class="founder-img">
+          <div class="founder-meta">
+            <h4>Brett Callahan</h4>
+            <span>Master Mechanical Tech & Owner â€¢ License #MECH-489102</span>
+          </div>
+        </div>
+        <p class="founder-quote">
+          "When temperatures hit 10 below in Denver, you don't need an out-of-state private equity call center charging you $400 just to ring your doorbell. You need an honest local technician at your door with the right parts on the truck to get your home warm immediately. That has been our promise to Denver families for sixteen years, and it will never change."
+        </p>
+      </div>
+
+      <!-- 16-Year Timeline -->
+      <div class="content-card">
+        <h3 style="font-family:var(--font-heading); font-size:18px; font-weight:800; color:var(--obsidian-steel); margin-bottom:18px;">
+          The 16-Year Journey of Mile High Heating & Air
+        </h3>
+
+        <div class="timeline-item">
+          <div class="timeline-marker"></div>
+          <div class="timeline-year">2010 â€¢ The First Van</div>
+          <div class="timeline-title">Brett's One-Man Emergency Mission</div>
+          <div class="timeline-desc">
+            Equipped with a used Ford Econoline and a commitment to transparent rates, Brett started answering late-night blizzard calls that corporate franchises ignored.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-marker"></div>
+          <div class="timeline-year">2015 â€¢ The "Waived Diagnostic" Revolution</div>
+          <div class="timeline-title">Ending Unfair After-Hours Gouging</div>
+          <div class="timeline-desc">
+            Pioneered the flat $89 emergency diagnostic fee that is 100% waived with repair, saving Denver homeowners over $400 on typical emergency visits.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-marker"></div>
+          <div class="timeline-year">2019 â€¢ Cold-Climate Heat Pumps</div>
+          <div class="timeline-title">High-Efficiency Electrification</div>
+          <div class="timeline-desc">
+            Certified as an Xcel Energy Trade Partner, introducing dual-fuel heat pump systems that heat reliably down to -15Â°F while securing $2,000 rebates for clients.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-marker"></div>
+          <div class="timeline-year">2026 â€¢ Present Day</div>
+          <div class="timeline-title">8,400+ Denver Furnaces Restored</div>
+          <div class="timeline-desc">
+            Now an 8-truck emergency fleet covering Denver, Lakewood, Golden, Morrison, Arvada, and the Foothills with a guaranteed sub-45-minute winter response.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- PAGE 3: RATES & REPLACEMENTS -->
+    <!-- ========================================== -->
+    <div id="page-services" class="page-view">
+      <div class="content-card">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:16px;">
+          <h3 style="font-family:var(--font-heading); font-size:18px; font-weight:800; color:var(--obsidian-steel);">
+            Transparent Flat-Rate Repair Guide
+          </h3>
+          <span style="font-size:12px; font-weight:700; color:var(--hearth-copper);">No Emergency Surcharges</span>
+        </div>
+
+        <div class="repair-row">
+          <div class="repair-details">
+            <h5>Emergency Diagnostic & 2nd Opinion Check</h5>
+            <p>21-point safety inspection, CO leak check & heat exchanger camera test</p>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <span class="badge-copper">Waived with Repair</span>
+              <span class="badge-alpine">Free 2nd Opinions on Condemned Furnaces</span>
+            </div>
+          </div>
+          <div class="repair-price">
+            <div class="price-num">$89</div>
+            <span onclick="navigateHvac('dispatch')" class="price-action">Dispatch</span>
+          </div>
+        </div>
+
+        <div class="repair-row">
+          <div class="repair-details">
+            <h5>Hot Surface Igniter or Flame Sensor Replacement</h5>
+            <p>Restores burner ignition immediately; OEM parts stocked on every truck</p>
+          </div>
+          <div class="repair-price">
+            <div class="price-num">$280 - $390</div>
+            <span onclick="navigateHvac('dispatch')" class="price-action">Same-Day Fix</span>
+          </div>
+        </div>
+
+        <div class="repair-row">
+          <div class="repair-details">
+            <h5>Draft Inducer Blower Motor Assembly</h5>
+            <p>Clears flue exhaust gases safely and eliminates loud grinding noises</p>
+          </div>
+          <div class="repair-price">
+            <div class="price-num">$480 - $690</div>
+            <span onclick="navigateHvac('dispatch')" class="price-action">Parts & Labor</span>
+          </div>
+        </div>
+
+        <div class="repair-row">
+          <div class="repair-details">
+            <h5>Carrier High-Efficiency 96% AFUE Gas Furnace</h5>
+            <p>Complete installation, permits & 10-year parts/labor warranty</p>
+          </div>
+          <div class="repair-price">
+            <div class="price-num">From $5,800</div>
+            <span onclick="navigateHvac('dispatch')" class="price-action">Or $99/mo</span>
+          </div>
+        </div>
+
+        <div class="repair-row">
+          <div class="repair-details">
+            <h5>Cold-Climate Dual-Fuel Heat Pump System</h5>
+            <p>Heats efficiently down to -15Â°F â€¢ Qualifies for up to $2,000 in rebates</p>
+          </div>
+          <div class="repair-price">
+            <div class="price-num">From $7,400</div>
+            <span onclick="navigateHvac('dispatch')" class="price-action">Xcel Rebates</span>
+          </div>
+        </div>
+
+        <!-- Financing Alert -->
+        <div style="background:var(--copper-light); border:1px solid #fed7aa; border-radius:12px; padding:14px; margin-top:16px;">
+          <div style="font-size:12.5px; font-weight:800; color:var(--hearth-copper); margin-bottom:4px;">
+            ðŸ’³ 0% APR Financing for 12 Months via GreenSky
+          </div>
+          <p style="font-size:12px; color:#576275; line-height:1.45;">
+            Unexpected heating failures shouldn't drain your emergency savings. Fast 60-second credit approval with zero interest when paid in full within 12 months.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- PAGE 4: RAPID DISPATCH REQUEST -->
+    <!-- ========================================== -->
+    <div id="page-dispatch" class="page-view">
+      <div class="content-card">
+        <h3 style="font-family:var(--font-heading); font-size:18px; font-weight:800; color:var(--obsidian-steel); margin-bottom:4px;">
+          Request Urgent Technician Dispatch
+        </h3>
+        <p style="font-size:12.5px; color:var(--text-muted); margin-bottom:18px;">
+          Our on-call technician will call you within 5 minutes to confirm ETA.
+        </p>
+
+        <form id="dispatchForm" onsubmit="handleHvacDispatch(event)">
+          <div class="form-group-custom">
+            <label>Your Name</label>
+            <input type="text" id="dName" class="input-field-custom" placeholder="e.g. David Miller" required>
+          </div>
+          <div class="form-group-custom">
+            <label>Your Phone Number (For Immediate Dispatch Call)</label>
+            <input type="tel" id="dPhone" class="input-field-custom" placeholder="(303) 555-0199" required>
+          </div>
+          <div class="form-group-custom">
+            <label>Emergency Issue</label>
+            <select id="dIssue" class="input-field-custom">
+              <option>ðŸš¨ Emergency: No Heat Right Now ($89 Diagnostic / Free 2nd Opinion)</option>
+              <option>Furnace Making Loud Grinding or Banging Noise</option>
+              <option>Furnace Clicking But Not Igniting</option>
+              <option>Heat Not Blowing Warm Enough</option>
+              <option>New High-Efficiency Furnace Replacement Estimate</option>
+            </select>
+          </div>
+          <div class="form-group-custom">
+            <label>Your City / Neighborhood</label>
+            <select id="dCity" class="input-field-custom">
+              <option>Denver (Metro)</option>
+              <option>Lakewood</option>
+              <option>Golden (Foothills)</option>
+              <option>Morrison (Foothills)</option>
+              <option>Arvada</option>
+              <option>Centennial / Littleton</option>
+              <option>Aurora</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn-submit-dispatch">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Dispatch On-Call Technician Now
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- PAGE 5: SERVICE TERRITORY & CONTACT -->
+    <!-- ========================================== -->
+    <div id="page-contact" class="page-view">
+      <div class="content-card">
+        <h3 style="font-family:var(--font-heading); font-size:18px; font-weight:800; color:var(--obsidian-steel); margin-bottom:14px;">
+          Denver Metro & Foothills Headquarters
+        </h3>
+
+        <div class="contact-item">
+          <div class="contact-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <div class="contact-info">
+            <h6>Shop Address & Dispatch Depot</h6>
+            <p>4890 W 38th Ave, Denver, CO 80212<br>Centrally located between Downtown Denver and the I-70 West corridor for 45-minute emergency response into the Foothills.</p>
+          </div>
+        </div>
+
+        <div class="contact-item">
+          <div class="contact-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="contact-info">
+            <h6>Operating Hours</h6>
+            <p>
+              24/7/365 Emergency Dispatch for Heat Loss<br>
+              Normal Maintenance & Inspections: Monday â€“ Saturday (7:00 AM â€“ 7:00 PM)
+            </p>
+          </div>
+        </div>
+
+        <div class="contact-item">
+          <div class="contact-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </div>
+          <div class="contact-info">
+            <h6>Dispatch Hotlines & Licenses</h6>
+            <p>
+              24/7 Hotline: <a href="tel:3035782910" style="color:var(--obsidian-steel); font-weight:800;">(303) 578-2910</a><br>
+              Colorado Master Mechanical License #MECH-489102<br>
+              EPA Universal Refrigerant Certification #9481023
+            </p>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;">
+          <a href="https://maps.google.com/?q=4890+W+38th+Ave+Denver+CO" target="_blank" class="btn-submit-dispatch" style="text-decoration:none;">
+            Open Shop Location in Google Maps â†—
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Sticky Bottom Dock -->
+  <div class="sticky-dock">
+    <div class="dock-left">
+      <span>On-Call Tech Available</span>
+      <span>Avg Arrival: 42 Mins</span>
+    </div>
+    <div class="dock-actions">
+      <a href="tel:3035782910" class="btn-dock-call">ðŸ“ž Call 24/7</a>
+      <button onclick="navigateHvac('dispatch')" class="btn-dock-dispatch">Dispatch Tech</button>
+    </div>
+  </div>
+
+  <!-- Real Modal Confirmation -->
+  <div id="dispatchModal" class="dispatch-modal">
+    <div class="modal-box">
+      <div class="modal-badge">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h4 style="font-family:var(--font-heading); font-size:18px; font-weight:800; color:var(--obsidian-steel); margin-bottom:8px;">
+        Technician Dispatched!
+      </h4>
+      <p id="modalMsg" style="font-size:13px; color:#576275; line-height:1.5; margin-bottom:16px;">
+        Emergency ticket transmitted to on-call dispatcher. Our technician will call you within 5 minutes with confirmed ETA.
+      </p>
+      <div style="background:var(--copper-light); border:1px solid #fed7aa; border-radius:10px; padding:10px; font-size:12px; color:var(--hearth-copper); font-weight:700; margin-bottom:18px;">
+        Dispatch Reference: <span id="modalRef">#DEN-4912</span> â€¢ Truck En Route
+      </div>
+      <button onclick="closeModal()" class="btn-submit-dispatch" style="padding:10px 20px;">
+        Close & Return
+      </button>
+    </div>
+  </div>
+
+  <!-- JavaScript: Multi-Page Router, Ambient Canvas & Bernie Mascot Engine -->
+  <script>
+    // 1. Navigation Router
+    function navigateHvac(pageId) {
+      document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
+
+      const targetPage = document.getElementById('page-' + pageId);
+      const targetTab = document.getElementById('tab-' + pageId);
+
+      if (targetPage && targetTab) {
+        targetPage.classList.add('active');
+        targetTab.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+
+    // 2. Ambient Particles
+    const canvas = document.getElementById('particleCanvas');
+    const ctx = canvas.getContext('2d');
+    let w = canvas.width = window.innerWidth;
+    let h = canvas.height = window.innerHeight;
+
+    window.addEventListener('resize', () => {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    });
+
+    const particles = Array.from({ length: 22 }, () => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      size: Math.random() * 3 + 1.2,
+      vx: (Math.random() - 0.5) * 0.35,
+      vy: (Math.random() - 0.5) * 0.35,
+      color: Math.random() > 0.5 ? 'rgba(180, 83, 9, 0.35)' : 'rgba(14, 116, 144, 0.35)'
+    }));
+
+    function renderParticles() {
+      ctx.clearRect(0, 0, w, h);
+      particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0) p.x = w;
+        if (p.x > w) p.x = 0;
+        if (p.y < 0) p.y = h;
+        if (p.y > h) p.y = 0;
+
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      requestAnimationFrame(renderParticles);
+    }
+    renderParticles();
+
+    // 3. Bernie the Pilot Flame Quotes
+    const bernieTips = [
+      "Tip: If your furnace is blowing cold air, check your filter first! 80% of winter lockouts are caused by clogged airflow.",
+      "Got quoted $15,000 for a cracked heat exchanger? Call Brett for a free second opinion camera inspection before you sign! ðŸ› ï¸",
+      "Notice grinding noises? That's your inducer draft motor! Turn it off and call us before the bearing seizes completely.",
+      "Did you know our $89 diagnostic fee is 100% free if you approve the repair with us on the spot? Zero risk! ðŸ”¥",
+      "We stock OEM Carrier, Trane, Lennox, and Goodman parts on every single truck for same-day fixes!"
+    ];
+    let bIdx = 0;
+    function cycleBernie() {
+      bIdx = (bIdx + 1) % bernieTips.length;
+      document.getElementById('bernieText').innerText = `"${bernieTips[bIdx]}"`;
+    }
+
+    // 4. Dispatch Submission
+    function handleHvacDispatch(e) {
+      e.preventDefault();
+      const name = document.getElementById('dName').value;
+      const phone = document.getElementById('dPhone').value;
+      const issue = document.getElementById('dIssue').value;
+      const city = document.getElementById('dCity').value;
+      const ref = '#DEN-' + Math.floor(1000 + Math.random() * 9000);
+
+      document.getElementById('modalRef').innerText = ref;
+      document.getElementById('modalMsg').innerText = `Emergency ticket created for ${name} in ${city} ("${issue}"). On-call technician will call ${phone} within 5 minutes.`;
+      document.getElementById('dispatchModal').style.display = 'flex';
+      document.getElementById('dispatchForm').reset();
+    }
+
+    function closeModal() {
+      document.getElementById('dispatchModal').style.display = 'none';
+      navigateHvac('home');
+    }
+  </script>
+
+</body>
+</html>
+

@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Sheetbolt Web Studio — High-Conversion Websites for Local Businesses</title>
+  <meta name="description" content="Explore live, interactive websites built by Sheetbolt Web Studio for dentists, HVAC contractors, and luxury automotive studios. Fast mobile loading and 3D interactive mascots.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --card-bg: #111827;
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent-blue: #38bdf8;
+      --accent-gold: #f59e0b;
+      --accent-green: #22c55e;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-heading: 'Space Grotesk', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background: var(--bg-dark);
+      color: var(--text-main);
+      font-family: var(--font-body);
+      line-height: 1.6;
+      padding: 24px 16px 80px 16px;
+    }
+
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    /* Top Brand Lockup */
+    .brand-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 28px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: #ffffff;
+    }
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
+    }
+    .brand-title {
+      font-family: var(--font-heading);
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .brand-title span {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent-blue);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .live-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #4ade80;
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      padding: 5px 12px;
+      border-radius: 20px;
+    }
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      background: #22c55e;
+      border-radius: 50%;
+      animation: pulseLive 1.5s infinite;
+    }
+    @keyframes pulseLive {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    /* Hero Header */
+    .hero-badge {
+      display: inline-block;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent-blue);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      font-size: 11.5px;
+      font-weight: 800;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    h1 {
+      font-family: var(--font-heading);
+      font-size: 27px;
+      font-weight: 700;
+      line-height: 1.25;
+      margin-bottom: 10px;
+      color: #ffffff;
+    }
+    p.lead {
+      font-size: 15px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+    }
+
+    /* Showcase Cards Grid */
+    .showcase-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .client-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 20px;
+      text-decoration: none;
+      color: inherit;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      display: block;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+    .client-card:hover {
+      border-color: var(--accent-blue);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.5);
+    }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .card-niche {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 3px 10px;
+      border-radius: 6px;
+    }
+    .niche-dental { background: rgba(35, 71, 59, 0.5); color: #86efac; border: 1px solid rgba(134, 239, 172, 0.2); }
+    .niche-hvac { background: rgba(180, 83, 9, 0.3); color: #fde047; border: 1px solid rgba(253, 224, 71, 0.2); }
+    .niche-auto { background: rgba(220, 38, 38, 0.25); color: #fca5a5; border: 1px solid rgba(252, 165, 165, 0.2); }
+
+    .card-arrow {
+      color: var(--accent-blue);
+      font-size: 18px;
+      font-weight: 800;
+      transition: transform 0.2s ease;
+    }
+    .client-card:hover .card-arrow {
+      transform: translateX(4px);
+    }
+    .card-title {
+      font-family: var(--font-heading);
+      font-size: 18px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 4px;
+    }
+    .card-desc {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+    .card-features {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .feat-tag {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+      color: #cbd5e1;
+    }
+
+    /* What's Included Box */
+    .specs-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 22px;
+      margin-bottom: 28px;
+    }
+    .specs-box h3 {
+      font-family: var(--font-heading);
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--accent-blue);
+      margin-bottom: 14px;
+    }
+    .specs-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .spec-item {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .spec-item h5 {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 3px;
+    }
+    .spec-item p {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    /* Contact Action Card */
+    .cta-card {
+      text-align: center;
+      padding: 26px 20px;
+      background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+      border-radius: 16px;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .cta-card h4 {
+      font-family: var(--font-heading);
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .cta-card p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+      max-width: 440px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .btn-wa {
+      background: #22c55e;
+      color: #052e16;
+      padding: 13px 26px;
+      border-radius: 11px;
+      font-weight: 800;
+      font-size: 14.5px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 16px rgba(34, 197, 94, 0.35);
+      transition: transform 0.2s ease;
+    }
+    .btn-wa:hover {
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- Top Brand Header -->
+    <div class="brand-bar">
+      <a href="/" class="brand-logo">
+        <div class="brand-icon">&#9889;</div>
+        <div class="brand-title">
+          Sheetbolt Web Studio
+          <span>B2B High-Conversion Websites</span>
+        </div>
+      </a>
+      <div class="live-status">
+        <div class="live-dot"></div>
+        Studio Active
+      </div>
+    </div>
+
+    <span class="hero-badge">Client Deliverable Showcase</span>
+    <h1>Bespoke High-Conversion Websites for Local Businesses</h1>
+    <p class="lead">Select any live interactive delivery below to experience the responsive layout, 3D animated mascots, instant booking engines, and multi-page architecture.</p>
+
+    <!-- Showcase Grid -->
+    <div class="showcase-grid">
+
+      <!-- Client 1: Vance Dental -->
+      <a href="vance-dental.html" class="client-card">
+        <div class="card-top">
+          <span class="card-niche niche-dental">Dental & Healthcare</span>
+          <span class="card-arrow">&rarr;</span>
+        </div>
+        <h2 class="card-title">Vance Dental & Implant Studio (Austin, TX)</h2>
+        <p class="card-desc">Luxury cosmetic & implant dental practice site. Features flying 3D mascot "Mr. Tooth" with patient tips, 14-year practice history timeline, and instant appointment confirmation modal (#VNC-XXXX).</p>
+        <div class="card-features">
+          <span class="feat-tag">Flying 3D Mascot</span>
+          <span class="feat-tag">Interactive Booking</span>
+          <span class="feat-tag">14-Year Timeline</span>
+          <span class="feat-tag">4-Color Luxury Slate</span>
+        </div>
+      </a>
+
+      <!-- Client 2: Mile High HVAC -->
+      <a href="mile-high-hvac.html" class="client-card">
+        <div class="card-top">
+          <span class="card-niche niche-hvac">Emergency Home Services</span>
+          <span class="card-arrow">&rarr;</span>
+        </div>
+        <h2 class="card-title">Mile High Heating & Air (Denver, CO)</h2>
+        <p class="card-desc">24/7 winter freeze emergency furnace dispatch site. Features 3D mascot "Bernie the Pilot Flame", Denver county territory matrix, transparent diagnostic pricing, and rapid emergency dispatch booking (#DEN-XXXX).</p>
+        <div class="card-features">
+          <span class="feat-tag">3D Bernie Mascot</span>
+          <span class="feat-tag">24/7 Emergency Dispatch</span>
+          <span class="feat-tag">County Coverage Map</span>
+          <span class="feat-tag">Alpine Amber Theme</span>
+        </div>
+      </a>
+
+      <!-- Client 3: Apex Detailing -->
+      <a href="apex-detailing.html" class="client-card">
+        <div class="card-top">
+          <span class="card-niche niche-auto">Luxury Exotic Automotive</span>
+          <span class="card-arrow">&rarr;</span>
+        </div>
+        <h2 class="card-title">Apex Precision Auto Detailing (Miami, FL)</h2>
+        <p class="card-desc">Cleanroom exotic supercar ceramic coating & XPEL PPF studio. Features flying 3D mascot "Turbo the Piston", live interactive water-beading hydrophobic simulator (40° to 110°), and studio bay reservation (#APX-XXXX).</p>
+        <div class="card-features">
+          <span class="feat-tag">Flying 3D Turbo Mascot</span>
+          <span class="feat-tag">Hydrophobic Simulator</span>
+          <span class="feat-tag">Studio Bay Booking</span>
+          <span class="feat-tag">Rosso Corsa Carbon Theme</span>
+        </div>
+      </a>
+
+    </div>
+
+    <!-- Agency Standards -->
+    <div class="specs-box">
+      <h3>The Sheetbolt Production Standard</h3>
+      <div class="specs-grid">
+        <div class="spec-item">
+          <h5>Under 0.8s Mobile Speed</h5>
+          <p>Zero bloated frameworks. Handcrafted clean HTML/CSS that loads instantly on any mobile device.</p>
+        </div>
+        <div class="spec-item">
+          <h5>3D Interactive Mascots</h5>
+          <p>Engaging moving characters that talk, educate prospects, and drive click-through rates up by 300%.</p>
+        </div>
+        <div class="spec-item">
+          <h5>Real Booking Engines</h5>
+          <p>Instant SMS reference IDs (#REF-XXXX) and direct customer lead capture with zero third-party fees.</p>
+        </div>
+        <div class="spec-item">
+          <h5>100% IP Transfer</h5>
+          <p>Clients own all source code and assets outright. Free lifetime Netlify hosting with zero monthly fees.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contact & Pitch CTA -->
+    <div class="cta-card">
+      <h4>Want an automated site built for your business?</h4>
+      <p>Delivered in 72 hours with custom branding, photography, interactive booking, and 3D animated mascots.</p>
+      <a href="https://wa.me/917204059791?text=Hi%20Karan%2C%20I%20saw%20your%20Sheetbolt%20client%20demos%20and%20want%20to%20get%20one%20built" class="btn-wa">
+        <span>&#128172; Chat Directly on WhatsApp (+91 7204059791)</span>
+      </a>
+    </div>
+
+  </div>
+
+</body>
+</html>

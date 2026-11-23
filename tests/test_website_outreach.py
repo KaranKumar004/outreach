@@ -169,3 +169,21 @@ class TestWarmupSchedule:
             mock_dt.fromisoformat = datetime.fromisoformat
             cap = get_daily_send_cap(logs)
             assert cap == 10
+
+
+class TestDeliverablesPackage:
+    def test_vance_dental_package_integrity(self):
+        deliverable_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "website_outreach", "deliveries", "vance_dental"))
+        assert os.path.exists(os.path.join(deliverable_dir, "index.html"))
+        assert os.path.exists(os.path.join(deliverable_dir, "README_CLIENT_HANDOFF.txt"))
+        assert os.path.exists(os.path.join(deliverable_dir, "IP_RIGHTS_TRANSFER_CERTIFICATE.md"))
+        assert os.path.exists(os.path.join(deliverable_dir, "vance_dental_website_deliverable.zip"))
+
+    def test_mile_high_hvac_package_integrity(self):
+        deliverable_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "website_outreach", "deliveries", "mile_high_hvac"))
+        assert os.path.exists(os.path.join(deliverable_dir, "index.html"))
+        assert os.path.exists(os.path.join(deliverable_dir, "README_CLIENT_HANDOFF.txt"))
+        assert os.path.exists(os.path.join(deliverable_dir, "IP_RIGHTS_TRANSFER_CERTIFICATE.md"))
+        assert os.path.exists(os.path.join(deliverable_dir, "mile_high_hvac_website_deliverable.zip"))
+        assert os.path.exists(os.path.join(deliverable_dir, "CLIENT_CONVERSATION_AND_AUDIT_LOG.md"))
+

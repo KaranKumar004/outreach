@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Apex Precision Auto Detailing & Ceramic Studio | Miami, FL</title>
+  <meta name="description" content="Miami's premier exotic car detailing, XPEL self-healing PPF, and Gtechniq 9H ceramic coating studio. Climate-controlled cleanroom facility.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* 4-Color Luxury Automotive Architectural Palette */
+      --carbon-black: #090c13;
+      --carbon-surface: #111724;
+      --carbon-card: #182030;
+      --rosso-corsa: #dc2626;
+      --rosso-glow: #ef4444;
+      --titanium-silver: #e2e8f0;
+      --titanium-muted: #94a3b8;
+      --track-gold: #f59e0b;
+      
+      --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-heading: 'Space Grotesk', sans-serif;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background-color: var(--carbon-black);
+      color: var(--titanium-silver);
+      font-family: var(--font-body);
+      font-size: 15px;
+      line-height: 1.6;
+      padding-bottom: 90px;
+      overflow-x: hidden;
+    }
+
+    /* Ambient Hex Grid Canvas */
+    .ambient-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.35;
+    }
+
+    .app-wrapper {
+      position: relative;
+      z-index: 10;
+      max-width: 600px;
+      margin: 0 auto;
+      min-height: 100vh;
+      background: var(--carbon-black);
+      box-shadow: 0 0 60px rgba(0, 0, 0, 0.85);
+      border-left: 1px solid rgba(255, 255, 255, 0.07);
+      border-right: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    /* Top Automotive Header */
+    .top-header {
+      position: sticky;
+      top: 0;
+      background: rgba(9, 12, 19, 0.95);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      z-index: 100;
+      padding: 12px 18px;
+    }
+    .header-brand-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .brand-logo-lockup {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-shield {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--rosso-corsa), #991b1b);
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .brand-shield svg {
+      width: 20px;
+      height: 20px;
+      stroke: #ffffff;
+      fill: none;
+      stroke-width: 2.2;
+    }
+    .brand-text h1 {
+      font-family: var(--font-heading);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #ffffff;
+      line-height: 1.1;
+      text-transform: uppercase;
+    }
+    .brand-text span {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--track-gold);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .header-contact-btn {
+      background: rgba(220, 38, 38, 0.15);
+      color: #fca5a5;
+      border: 1px solid rgba(220, 38, 38, 0.4);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .header-contact-btn:hover {
+      background: var(--rosso-corsa);
+      color: #ffffff;
+    }
+
+    /* Multi-Page Navigation Tabs */
+    .nav-tabs-wrapper {
+      display: flex;
+      gap: 5px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      padding-bottom: 2px;
+    }
+    .nav-tabs-wrapper::-webkit-scrollbar {
+      display: none;
+    }
+    .nav-tab-btn {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--titanium-muted);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 7px 13px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .nav-tab-btn svg {
+      width: 13px;
+      height: 13px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+    }
+    .nav-tab-btn.active {
+      background: var(--rosso-corsa);
+      color: #ffffff;
+      border-color: var(--rosso-glow);
+      box-shadow: 0 2px 10px rgba(220, 38, 38, 0.4);
+    }
+
+    /* Page View Containers */
+    .page-view {
+      display: none;
+      padding: 18px;
+      animation: fadeIn 0.3s ease-out;
+    }
+    .page-view.active {
+      display: block;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Hero Studio Section */
+    .hero-media-box {
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 18px;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .hero-media-box img {
+      width: 100%;
+      height: 250px;
+      object-fit: cover;
+      display: block;
+    }
+    .hero-badge-overlay {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      background: rgba(9, 12, 19, 0.85);
+      backdrop-filter: blur(10px);
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      font-size: 11px;
+      font-weight: 700;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .hero-badge-overlay span {
+      width: 7px;
+      height: 7px;
+      background: #22c55e;
+      border-radius: 50%;
+      display: inline-block;
+      animation: pulseGreen 1.6s infinite;
+    }
+    @keyframes pulseGreen {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.4); opacity: 0.5; }
+    }
+    .hero-text-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(180deg, transparent 0%, rgba(9, 12, 19, 0.95) 85%);
+      padding: 24px 18px 16px 18px;
+    }
+    .hero-text-overlay h2 {
+      font-family: var(--font-heading);
+      font-size: 21px;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+    .hero-text-overlay p {
+      font-size: 12.5px;
+      color: var(--titanium-muted);
+    }
+
+    /* Content Cards */
+    .content-card {
+      background: var(--carbon-card);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    /* Interactive Hydrophobic Slider Card */
+    .hydrophobic-card {
+      background: linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(17, 23, 36, 0.95));
+      border: 1px solid rgba(220, 38, 38, 0.3);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .hydrophobic-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .hydrophobic-header h4 {
+      font-family: var(--font-heading);
+      font-size: 15px;
+      color: #ffffff;
+      font-weight: 700;
+    }
+    .hydrophobic-stat {
+      background: var(--rosso-corsa);
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .hydro-surface-box {
+      height: 80px;
+      background: #0f141f;
+      border-radius: 10px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      border: 1px solid rgba(255,255,255,0.06);
+      margin-bottom: 12px;
+    }
+    .water-bead {
+      width: 24px;
+      height: 24px;
+      background: radial-gradient(circle at 35% 35%, #93c5fd, #2563eb);
+      border-radius: 50%;
+      box-shadow: 0 4px 10px rgba(37, 99, 235, 0.5);
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .hydro-slider-ctrl {
+      width: 100%;
+      accent-color: var(--rosso-corsa);
+      cursor: pointer;
+    }
+
+    /* Service Price Cards */
+    .price-tier-card {
+      background: var(--carbon-surface);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .price-tier-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(220, 38, 38, 0.5);
+    }
+    .price-tier-info h4 {
+      font-family: var(--font-heading);
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 3px;
+    }
+    .price-tier-info p {
+      font-size: 12px;
+      color: var(--titanium-muted);
+      line-height: 1.4;
+      max-width: 320px;
+    }
+    .price-tier-tag {
+      text-align: right;
+    }
+    .price-tier-tag span:first-child {
+      display: block;
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--track-gold);
+      font-family: var(--font-heading);
+    }
+    .price-tier-tag span:last-child {
+      display: block;
+      font-size: 10px;
+      color: var(--titanium-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    /* Founder Bio Box */
+    .founder-box {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .founder-avatar {
+      width: 90px;
+      height: 90px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 2px solid var(--rosso-corsa);
+      flex-shrink: 0;
+      box-shadow: 0 6px 18px rgba(220, 38, 38, 0.25);
+    }
+    .founder-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .founder-bio h4 {
+      font-family: var(--font-heading);
+      font-size: 16px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 3px;
+    }
+    .founder-bio span {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--rosso-glow);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .founder-bio p {
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--titanium-muted);
+    }
+
+    /* Timeline Section */
+    .timeline-item {
+      position: relative;
+      padding-left: 28px;
+      padding-bottom: 20px;
+      border-left: 2px solid rgba(255, 255, 255, 0.1);
+    }
+    .timeline-item:last-child {
+      border-left-color: transparent;
+      padding-bottom: 0;
+    }
+    .timeline-dot {
+      position: absolute;
+      left: -7px;
+      top: 0;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--rosso-corsa);
+      box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.25);
+    }
+    .timeline-year {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--track-gold);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 2px;
+    }
+    .timeline-title {
+      font-family: var(--font-heading);
+      font-size: 14px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 4px;
+    }
+    .timeline-desc {
+      font-size: 12px;
+      color: var(--titanium-muted);
+      line-height: 1.45;
+    }
+
+    /* Booking Form */
+    .booking-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--titanium-silver);
+      margin-bottom: 6px;
+    }
+    .form-input, .form-select {
+      width: 100%;
+      background: #0d121c;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 9px;
+      padding: 11px 14px;
+      color: #ffffff;
+      font-family: var(--font-body);
+      font-size: 13.5px;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+    .form-input:focus, .form-select:focus {
+      border-color: var(--rosso-corsa);
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.2);
+    }
+    .btn-submit-booking {
+      background: linear-gradient(135deg, var(--rosso-corsa), #991b1b);
+      color: #ffffff;
+      border: none;
+      padding: 13px;
+      border-radius: 10px;
+      font-family: var(--font-heading);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(220, 38, 38, 0.35);
+      transition: opacity 0.2s ease;
+      margin-top: 6px;
+    }
+    .btn-submit-booking:hover {
+      opacity: 0.92;
+    }
+
+    /* Modal Confirmation */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-box {
+      background: var(--carbon-card);
+      border: 1px solid rgba(220, 38, 38, 0.4);
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 440px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+      animation: modalPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes modalPop {
+      from { transform: scale(0.85); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .modal-badge {
+      display: inline-block;
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      margin-bottom: 12px;
+    }
+    .modal-ref {
+      font-family: var(--font-heading);
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--track-gold);
+      margin: 8px 0;
+      letter-spacing: 1px;
+    }
+
+    /* Sticky Bottom Quick Dock */
+    .sticky-dock {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(9, 12, 19, 0.96);
+      backdrop-filter: blur(14px);
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 10px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 90;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .dock-call-btn {
+      background: rgba(255,255,255,0.08);
+      color: #ffffff;
+      padding: 9px 14px;
+      border-radius: 9px;
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.15);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dock-book-btn {
+      background: linear-gradient(135deg, var(--rosso-corsa), #991b1b);
+      color: #ffffff;
+      padding: 9px 18px;
+      border-radius: 9px;
+      font-size: 13px;
+      font-weight: 800;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+    }
+
+    /* ========================================================
+       CINEMATIC FLYING & MOVING 3D MASCOT (TURBO THE PISTON)
+       ======================================================== */
+    .mascot-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(9, 12, 19, 0.75);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 990;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .mascot-backdrop.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .flying-mascot-container {
+      position: fixed;
+      z-index: 995;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: all 0.95s cubic-bezier(0.19, 1, 0.22, 1);
+      will-change: transform, top, left, right, bottom, opacity;
+    }
+
+    /* Stage 1: Off-screen top before flying in with racing angle */
+    .flying-mascot-container.phase-offscreen {
+      top: -240px;
+      left: 50%;
+      transform: translate(-50%, -100%) scale(0.2) rotate(-45deg);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Stage 2: Center screen hover with active speech bubble */
+    .flying-mascot-container.phase-center {
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(1.15) rotate(0deg);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Stage 3: Smooth glide to bottom-right corner widget */
+    .flying-mascot-container.phase-docked {
+      top: auto;
+      bottom: 78px;
+      left: auto;
+      right: 18px;
+      transform: translate(0, 0) scale(0.85);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* 3D Mascot Character Figure */
+    .mascot-figure-3d {
+      position: relative;
+      width: 145px;
+      height: 145px;
+      cursor: pointer;
+      user-select: none;
+      filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.7));
+      animation: floatPiston 3s ease-in-out infinite;
+      transition: transform 0.3s ease;
+    }
+    .flying-mascot-container.phase-docked .mascot-figure-3d {
+      width: 105px;
+      height: 105px;
+      filter: drop-shadow(0 8px 20px rgba(0,0,0,0.5));
+    }
+    .mascot-figure-3d:hover {
+      transform: scale(1.08) rotate(4deg);
+    }
+    .mascot-img-3d {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 4px solid var(--rosso-corsa);
+      box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.35), 0 16px 36px rgba(0,0,0,0.6);
+      background: #0f141f;
+    }
+
+    .mascot-rpm-badge {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      background: linear-gradient(135deg, var(--rosso-corsa), #7f1d1d);
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 12px;
+      border: 2px solid rgba(255,255,255,0.4);
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-family: var(--font-heading);
+    }
+    .mascot-rpm-badge::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: #22c55e;
+      border-radius: 50%;
+      animation: pulseRpm 1.4s infinite;
+    }
+
+    /* Dynamic Speech Bubble */
+    .speech-bubble-3d {
+      background: #111726;
+      color: #ffffff;
+      border: 1px solid rgba(220, 38, 38, 0.4);
+      border-radius: 18px;
+      padding: 18px 20px;
+      max-width: 340px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(220, 38, 38, 0.2);
+      margin-bottom: 16px;
+      position: relative;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(14px) scale(0.9);
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .speech-bubble-3d.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    .speech-bubble-3d::after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 10px 10px 0;
+      border-style: solid;
+      border-color: #111726 transparent;
+      display: block;
+      width: 0;
+    }
+
+    /* Docked speech bubble */
+    .flying-mascot-container.phase-docked .speech-bubble-3d {
+      position: absolute;
+      bottom: 115px;
+      right: 0;
+      margin-bottom: 0;
+      max-width: 280px;
+      display: none;
+      text-align: left;
+    }
+    .flying-mascot-container.phase-docked .speech-bubble-3d.dock-open {
+      display: block;
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    .flying-mascot-container.phase-docked .speech-bubble-3d::after {
+      left: auto;
+      right: 36px;
+      transform: none;
+    }
+
+    .speech-tag {
+      font-size: 10.5px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--track-gold);
+      margin-bottom: 4px;
+    }
+    .speech-title {
+      font-family: var(--font-heading);
+      font-size: 18px;
+      font-weight: 800;
+      color: #ffffff;
+      margin: 0 0 6px 0;
+    }
+    .speech-text {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--titanium-muted);
+      margin: 0 0 14px 0;
+    }
+    .speech-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    .btn-mascot-explore {
+      background: linear-gradient(135deg, var(--rosso-corsa), #991b1b);
+      color: #ffffff;
+      border: none;
+      padding: 9px 18px;
+      border-radius: 9px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4);
+      transition: opacity 0.2s ease;
+    }
+    .btn-mascot-explore:hover {
+      opacity: 0.9;
+    }
+    .speech-timer {
+      font-size: 11px;
+      color: var(--titanium-muted);
+      font-weight: 600;
+    }
+
+    @keyframes floatPiston {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-12px) rotate(3deg); }
+    }
+    @keyframes pulseRpm {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.8); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient Animated Hex Grid Canvas -->
+  <canvas id="ambientHexCanvas" class="ambient-canvas"></canvas>
+
+  <div class="app-wrapper">
+    
+    <!-- Top Automotive Header -->
+    <header class="top-header">
+      <div class="header-brand-row">
+        <div class="brand-logo-lockup">
+          <div class="brand-shield">
+            <svg viewBox="0 0 24 24"><path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z"></path></svg>
+          </div>
+          <div class="brand-text">
+            <h1>Apex Precision</h1>
+            <span>Ceramic & PPF Studio &bull; Miami</span>
+          </div>
+        </div>
+        <a href="tel:3059284102" class="header-contact-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+          (305) 928-4102
+        </a>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs-wrapper">
+        <button class="nav-tab-btn active" onclick="navigatePage('home')">
+          <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+          Garage Bay
+        </button>
+        <button class="nav-tab-btn" onclick="navigatePage('history')">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          Our Heritage
+        </button>
+        <button class="nav-tab-btn" onclick="navigatePage('packages')">
+          <svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+          Ceramic & PPF
+        </button>
+        <button class="nav-tab-btn" onclick="navigatePage('reserve')">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          Reserve Bay
+        </button>
+        <button class="nav-tab-btn" onclick="navigatePage('studio')">
+          <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+          Cleanroom Facility
+        </button>
+      </nav>
+    </header>
+
+    <!-- ================= PAGE 1: HOME GARAGE BAY ================= -->
+    <main id="page-home" class="page-view active">
+      <div class="hero-media-box">
+        <img src="assets_apex/detailing_hero.jpg" alt="Apex Exotic Car Cleanroom Studio">
+        <div class="hero-badge-overlay">
+          <span></span> XPEL Certified &bull; 6 Climate Bays Active
+        </div>
+        <div class="hero-text-overlay">
+          <h2>Armor Your Exotic with 9H Ceramic & XPEL PPF</h2>
+          <p>Zero swirls. Mirror reflections. 10-year hydrophobic self-healing protection for Ferrari, Porsche, and McLaren.</p>
+        </div>
+      </div>
+
+      <!-- Hydrophobic Slider Interactive Card -->
+      <div class="hydrophobic-card">
+        <div class="hydrophobic-header">
+          <h4>Hydrophobic Water-Beading Simulator</h4>
+          <span class="hydrophobic-stat" id="hydroContactAngle">110° Contact Angle (Gtechniq)</span>
+        </div>
+        <div class="hydro-surface-box">
+          <div class="water-bead" id="bead1"></div>
+          <div class="water-bead" id="bead2"></div>
+          <div class="water-bead" id="bead3"></div>
+          <div class="water-bead" id="bead4"></div>
+        </div>
+        <input type="range" class="hydro-slider-ctrl" min="0" max="100" value="85" id="hydroRange" oninput="updateHydroDemo(this.value)">
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--titanium-muted); margin-top:6px;">
+          <span>Unprotected Factory Clearcoat</span>
+          <span>9H Gtechniq Crystal Serum Ultra</span>
+        </div>
+      </div>
+
+      <!-- Trust Badges Grid -->
+      <div class="content-card">
+        <h3 style="font-family:var(--font-heading); font-size:16px; color:#ffffff; margin-bottom:12px;">The Apex Studio Standard</h3>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div style="background:var(--carbon-surface); padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.06);">
+            <div style="color:var(--rosso-glow); font-weight:800; font-size:12px; margin-bottom:2px;">Positive Pressure Bays</div>
+            <div style="font-size:11.5px; color:var(--titanium-muted);">HEPA-filtered dust-free air keeps clearcoat 100% contamination-free during ceramic curing.</div>
+          </div>
+          <div style="background:var(--carbon-surface); padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.06);">
+            <div style="color:var(--track-gold); font-weight:800; font-size:12px; margin-bottom:2px;">6500K Inspection Grid</div>
+            <div style="font-size:11.5px; color:var(--titanium-muted);">Honeycomb high-CRI illumination reveals micro-scratches hidden to ordinary sunlight.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Verified Exotic Owner Reviews -->
+      <div class="content-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <h3 style="font-family:var(--font-heading); font-size:16px; color:#ffffff;">Supercar Client Proof</h3>
+          <span style="color:var(--track-gold); font-size:12px; font-weight:700;">★ 5.0 (148 Google Reviews)</span>
+        </div>
+        <div style="border-left:2px solid var(--rosso-corsa); padding-left:12px; margin-bottom:12px;">
+          <p style="font-size:12.5px; color:var(--titanium-silver); font-style:italic;">"Enzo and his team did full-body XPEL Stealth PPF on my Ferrari SF90. Not a single seam or relief cut visible. The enclosed trailer pickup made the whole experience effortless."</p>
+          <span style="font-size:11px; font-weight:700; color:var(--titanium-muted); display:block; margin-top:4px;">— Mateo R., Miami Beach &bull; Ferrari SF90 Stradale</span>
+        </div>
+        <div style="border-left:2px solid var(--track-gold); padding-left:12px;">
+          <p style="font-size:12.5px; color:var(--titanium-silver); font-style:italic;">"Apex removed 8 years of track swirl marks from my Porsche 991.2 GT3 RS and locked it behind Gtechniq 9-year ceramic. The gloss depth is unreal."</p>
+          <span style="font-size:11px; font-weight:700; color:var(--titanium-muted); display:block; margin-top:4px;">— Julian K., Coral Gables &bull; Porsche GT3 RS</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- ================= PAGE 2: OUR HERITAGE & TIMELINE ================= -->
+    <main id="page-history" class="page-view">
+      <div class="content-card">
+        <div class="founder-box">
+          <div class="founder-avatar">
+            <img src="assets_apex/enzo_falcone.jpg" alt="Enzo Falcone, Master Detailer">
+          </div>
+          <div class="founder-bio">
+            <h4>Enzo Falcone</h4>
+            <span>Founder & Master Certified Detailer</span>
+            <p>IDA Certified, XPEL Master Installer, and former Scuderia Ferrari challenge support technician.</p>
+          </div>
+        </div>
+        <p style="font-size:13px; color:var(--titanium-muted); line-height:1.55;">
+          "At Apex, we treat automotive paint like fine art restoration. We don't use high-speed fillers that wash out in two rainstorms. We measure clearcoat thickness in microns with ultrasonic gauges and cut paint to absolute optical perfection before sealing it under aerospace-grade ceramic."
+        </p>
+      </div>
+
+      <!-- 12-Year History Timeline (2014 - 2026) -->
+      <div class="content-card">
+        <h3 style="font-family:var(--font-heading); font-size:16px; color:#ffffff; margin-bottom:16px;">12-Year Studio Evolution</h3>
+        
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-year">2014 &bull; Trackside Origins</div>
+          <div class="timeline-title">Homestead-Miami Challenge Support</div>
+          <div class="timeline-desc">Enzo began providing trackside paint correction and rubber-deposit removal for privateer Porsche Cup and Ferrari Challenge drivers in South Florida.</div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-year">2018 &bull; Wynwood Studio Launch</div>
+          <div class="timeline-title">First Climate-Controlled Cleanroom</div>
+          <div class="timeline-desc">Opened our flagship 3,500 sq ft facility in Wynwood, introducing Miami's first dust-free positive-pressure curing chambers for ceramic coatings.</div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-year">2021 &bull; XPEL Master Certification</div>
+          <div class="timeline-title">Custom Computerized Pattern Cutting</div>
+          <div class="timeline-desc">Invested in 72-inch automated Graphtec digital plotters and custom edge-wrapping templates, eliminating hand razor blades near factory paint.</div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-year">2026 &bull; Enclosed Transporter Fleet</div>
+          <div class="timeline-title">Zero-Mile White Glove Logistics</div>
+          <div class="timeline-desc">Expanded to two dedicated climate-controlled hydraulic lift trailers, transporting exotics directly from client estates to our bays with zero road exposure.</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ================= PAGE 3: CERAMIC & PPF PACKAGES ================= -->
+    <main id="page-packages" class="page-view">
+      <div class="content-card">
+        <h3 style="font-family:var(--font-heading); font-size:17px; color:#ffffff; margin-bottom:4px;">Precision Treatment Menu</h3>
+        <p style="font-size:12.5px; color:var(--titanium-muted); margin-bottom:14px;">Every treatment includes multi-stage iron decontamination, clay bar exfoliation, and ultrasonic paint depth measurement.</p>
+
+        <!-- Tier 1 -->
+        <div class="price-tier-card">
+          <div class="price-tier-info">
+            <h4>Stage 1 Correction & 3-Year Ceramic</h4>
+            <p>Removes 65-75% of swirls. Sealed with Gtechniq Crystal Serum Light. Extreme hydrophobicity and mirror gloss.</p>
+          </div>
+          <div class="price-tier-tag">
+            <span>$1,450</span>
+            <span>Complete</span>
+          </div>
+        </div>
+
+        <!-- Tier 2 -->
+        <div class="price-tier-card" style="border-color:rgba(220, 38, 38, 0.4);">
+          <div class="price-tier-info">
+            <h4>Mirror Correction & 9-Year 9H Ultra</h4>
+            <p>Multi-stage jeweling polish achieving 95%+ optical clarity. Gtechniq Crystal Serum Ultra with transferable CARFAX warranty.</p>
+          </div>
+          <div class="price-tier-tag">
+            <span>$2,650</span>
+            <span>Most Popular</span>
+          </div>
+        </div>
+
+        <!-- Tier 3 -->
+        <div class="price-tier-card">
+          <div class="price-tier-info">
+            <h4>Track Pack XPEL Ultimate Plus PPF</h4>
+            <p>High-impact defense covering full front bumper, full hood, fenders, mirrors, and rocker panels. Self-healing TPU film.</p>
+          </div>
+          <div class="price-tier-tag">
+            <span>$2,800</span>
+            <span>Self-Healing</span>
+          </div>
+        </div>
+
+        <!-- Tier 4 -->
+        <div class="price-tier-card">
+          <div class="price-tier-info">
+            <h4>Full Vehicle XPEL Stealth / Clear Armor</h4>
+            <p>Every painted surface custom wrapped with wrapped edges. Transforms gloss paint into satin stealth or shields factory finish completely.</p>
+          </div>
+          <div class="price-tier-tag">
+            <span>$6,500</span>
+            <span>10-Yr Warranty</span>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ================= PAGE 4: RESERVE YOUR BAY ================= -->
+    <main id="page-reserve" class="page-view">
+      <div class="content-card">
+        <h3 style="font-family:var(--font-heading); font-size:17px; color:#ffffff; margin-bottom:4px;">Reserve Your Studio Bay</h3>
+        <p style="font-size:12.5px; color:var(--titanium-muted); margin-bottom:14px;">We book only 3 vehicles per week per master technician to guarantee unhurried concours quality.</p>
+
+        <form class="booking-form" id="bayReservationForm" onsubmit="handleBayReservation(event)">
+          <div class="form-group">
+            <label for="carMake">Vehicle Year, Make & Model</label>
+            <input type="text" id="carMake" class="form-input" placeholder="e.g. 2024 Porsche 911 GT3 RS" required>
+          </div>
+          <div class="form-group">
+            <label for="clientName">Full Name</label>
+            <input type="text" id="clientName" class="form-input" placeholder="e.g. Alexander Vance" required>
+          </div>
+          <div class="form-group">
+            <label for="clientPhone">Mobile Phone (For Bay Dispatch SMS)</label>
+            <input type="tel" id="clientPhone" class="form-input" placeholder="(305) 555-0192" required>
+          </div>
+          <div class="form-group">
+            <label for="treatmentType">Select Protection Package</label>
+            <select id="treatmentType" class="form-select" required>
+              <option value="Mirror Correction & 9-Year Ceramic ($2,650)">Mirror Correction & 9-Year Ceramic ($2,650)</option>
+              <option value="Track Pack XPEL PPF ($2,800)">Track Pack XPEL PPF ($2,800)</option>
+              <option value="Full Vehicle XPEL Stealth/Clear Armor ($6,500)">Full Vehicle XPEL Stealth/Clear Armor ($6,500)</option>
+              <option value="Stage 1 Correction & 3-Year Ceramic ($1,450)">Stage 1 Correction & 3-Year Ceramic ($1,450)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="transportOpt">Enclosed White-Glove Transport</label>
+            <select id="transportOpt" class="form-select">
+              <option value="Client drop-off at Wynwood Studio">Client drop-off at Wynwood Studio</option>
+              <option value="Request Enclosed Hydraulic Trailer Pickup (Miami / Fort Lauderdale)">Request Enclosed Hydraulic Trailer Pickup (Miami / Fort Lauderdale)</option>
+              <option value="Request Transport from Palm Beach / Naples">Request Transport from Palm Beach / Naples</option>
+            </select>
+          </div>
+          <button type="submit" class="btn-submit-booking">Confirm Bay Reservation &rarr;</button>
+        </form>
+      </div>
+    </main>
+
+    <!-- ================= PAGE 5: CLEANROOM FACILITY & CONTACT ================= -->
+    <main id="page-studio" class="page-view">
+      <div class="content-card">
+        <h3 style="font-family:var(--font-heading); font-size:17px; color:#ffffff; margin-bottom:12px;">Studio Location & Security</h3>
+        <p style="font-size:13px; color:var(--titanium-muted); line-height:1.55; margin-bottom:14px;">
+          Our facility features 24/7 video monitoring, biometric cleanroom access, and $2,000,000 garage keeper insurance coverage.
+        </p>
+        <div style="background:var(--carbon-surface); padding:14px; border-radius:10px; margin-bottom:12px; border:1px solid rgba(255,255,255,0.06);">
+          <div style="font-size:11px; font-weight:800; color:var(--track-gold); text-transform:uppercase; margin-bottom:3px;">Address</div>
+          <div style="font-size:14px; font-weight:700; color:#ffffff;">1940 NW Miami Ct, Suite 102</div>
+          <div style="font-size:12px; color:var(--titanium-muted);">Wynwood Arts & Automotive District &bull; Miami, FL 33136</div>
+        </div>
+        <div style="background:var(--carbon-surface); padding:14px; border-radius:10px; border:1px solid rgba(255,255,255,0.06);">
+          <div style="font-size:11px; font-weight:800; color:var(--rosso-glow); text-transform:uppercase; margin-bottom:3px;">Hours & VIP Consultation</div>
+          <div style="font-size:14px; font-weight:700; color:#ffffff;">Monday – Saturday: 8:00 AM – 6:30 PM</div>
+          <div style="font-size:12px; color:var(--titanium-muted);">Private evening drop-offs available by appointment.</div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Sticky Bottom Bar -->
+    <div class="sticky-dock">
+      <a href="tel:3059284102" class="dock-call-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+        Call Master Tech
+      </a>
+      <button class="dock-book-btn" onclick="navigatePage('reserve')">
+        Reserve Bay &rarr;
+      </button>
+    </div>
+
+  </div>
+
+  <!-- Reservation Confirmation Modal -->
+  <div id="bookingModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-badge">&#10003; STUDIO BAY RESERVED</div>
+      <h3 style="font-family:var(--font-heading); font-size:20px; color:#ffffff;">Bay Reservation Locked</h3>
+      <div class="modal-ref" id="modalRef">#APX-9201</div>
+      <p id="modalMsg" style="font-size:13px; color:var(--titanium-muted); line-height:1.5; margin-bottom:18px;">
+        Your bay reservation has been scheduled. Enzo Falcone will call you to confirm transport logistics.
+      </p>
+      <button class="btn-submit-booking" style="width:100%;" onclick="closeModal()">Return to Garage Bay</button>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       CINEMATIC FLYING & MOVING 3D MASCOT (TURBO THE PISTON)
+       ======================================================== -->
+  <div id="mascotBackdrop" class="mascot-backdrop" onclick="mascotFlyToDock()"></div>
+
+  <div id="flyingMascotStage" class="flying-mascot-container phase-offscreen">
+    <div id="speechBubble3D" class="speech-bubble-3d">
+      <div class="speech-tag">3D Precision Guide</div>
+      <h3 class="speech-title" id="speechTitle">Rev Up! I'm Turbo!</h3>
+      <p class="speech-text" id="speechText">
+        Welcome to Apex Precision! Ready to give your supercar a 9H ceramic mirror finish and self-healing XPEL PPF armor?
+      </p>
+      <div class="speech-actions">
+        <button class="btn-mascot-explore" onclick="mascotFlyToDock()">Explore Studio &rarr;</button>
+        <span class="speech-timer" id="speechCountdown">Docking in 4s...</span>
+      </div>
+    </div>
+
+    <div class="mascot-figure-3d" onclick="toggleMascotInteraction()">
+      <img src="assets_apex/turbo_mascot.jpg" alt="Turbo the Piston 3D Mascot" class="mascot-img-3d">
+      <div class="mascot-rpm-badge">RPM 9K</div>
+    </div>
+  </div>
+
+  <!-- JavaScript: Routing, Ambient Canvas, Hydro Demo & Mascot Engine -->
+  <script>
+    // 1. Navigation Router
+    function navigatePage(pageId) {
+      document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-tab-btn').forEach(t => t.classList.remove('active'));
+
+      const target = document.getElementById('page-' + pageId);
+      if (target) {
+        target.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      const tabs = document.querySelectorAll('.nav-tab-btn');
+      const map = { 'home': 0, 'history': 1, 'packages': 2, 'reserve': 3, 'studio': 4 };
+      if (map[pageId] !== undefined && tabs[map[pageId]]) {
+        tabs[map[pageId]].classList.add('active');
+      }
+    }
+
+    // 2. Hydrophobic Slider Interactive Demo
+    function updateHydroDemo(val) {
+      const beads = [document.getElementById('bead1'), document.getElementById('bead2'), document.getElementById('bead3'), document.getElementById('bead4')];
+      const angle = document.getElementById('hydroContactAngle');
+      const scaleY = 0.25 + (val / 100) * 0.75;
+      const roundness = 20 + (val / 100) * 80;
+
+      beads.forEach(b => {
+        if (b) {
+          b.style.transform = `scaleY(${scaleY})`;
+          b.style.borderRadius = `${roundness}%`;
+        }
+      });
+
+      if (val > 75) {
+        angle.innerText = "110° Contact Angle (9H Ceramic)";
+        angle.style.background = "var(--rosso-corsa)";
+      } else if (val > 40) {
+        angle.innerText = "85° Contact Angle (Polymer Sealant)";
+        angle.style.background = "var(--track-gold)";
+      } else {
+        angle.innerText = "40° Flat Water Sheet (Unprotected)";
+        angle.style.background = "#64748b";
+      }
+    }
+
+    // 3. Ambient Hexagon Canvas Animation
+    const canvas = document.getElementById('ambientHexCanvas');
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      let w = canvas.width = window.innerWidth;
+      let h = canvas.height = window.innerHeight;
+
+      window.addEventListener('resize', () => {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+      });
+
+      const hexes = Array.from({ length: 22 }, () => ({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        size: 18 + Math.random() * 32,
+        speed: 0.15 + Math.random() * 0.35,
+        alpha: 0.05 + Math.random() * 0.12
+      }));
+
+      function renderHex() {
+        ctx.clearRect(0, 0, w, h);
+        ctx.strokeStyle = 'rgba(220, 38, 38, 0.4)';
+        ctx.lineWidth = 1;
+
+        hexes.forEach(hex => {
+          hex.y -= hex.speed;
+          if (hex.y < -50) hex.y = h + 50;
+
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI / 3) * i;
+            const hx = hex.x + hex.size * Math.cos(angle);
+            const hy = hex.y + hex.size * Math.sin(angle);
+            if (i === 0) ctx.moveTo(hx, hy);
+            else ctx.lineTo(hx, hy);
+          }
+          ctx.closePath();
+          ctx.strokeStyle = `rgba(220, 38, 38, ${hex.alpha})`;
+          ctx.stroke();
+        });
+
+        requestAnimationFrame(renderHex);
+      }
+      renderHex();
+    }
+
+    // 4. Booking Handler
+    function handleBayReservation(e) {
+      e.preventDefault();
+      const car = document.getElementById('carMake').value;
+      const name = document.getElementById('clientName').value;
+      const phone = document.getElementById('clientPhone').value;
+      const pkg = document.getElementById('treatmentType').value;
+      const ref = '#APX-' + Math.floor(1000 + Math.random() * 9000);
+
+      document.getElementById('modalRef').innerText = ref;
+      document.getElementById('modalMsg').innerText = `Thank you, ${name}! Your bay reservation for "${car}" (${pkg}) has been scheduled. Enzo Falcone will text your prep instructions to ${phone}.`;
+      document.getElementById('bookingModal').style.display = 'flex';
+      document.getElementById('bayReservationForm').reset();
+    }
+
+    function closeModal() {
+      document.getElementById('bookingModal').style.display = 'none';
+      navigatePage('home');
+    }
+
+    // 5. Cinematic Flying Mascot Controller (Turbo the Piston)
+    let countdownInterval = null;
+    let secondsLeft = 4;
+    let isDocked = false;
+
+    const turboTips = [
+      "Turbo's Pro Tip: Never wipe dry car paint with a towel! Always use a dual-plush 500 GSM microfiber with a ceramic detail spray lubricant! 🏁",
+      "Did you know? Ceramic coating bonds at the molecular level, creating a permanent sacrificial 9H quartz barrier that repels bird drop acids! 🛡️",
+      "Swirl marks come from automated car washes with spinning abrasive brushes. Our two-bucket grit guard method keeps paint 100% swirl-free! ✨",
+      "XPEL PPF is self-healing: light stone scratches disappear under hot Florida sunlight in under 15 minutes! ☀️"
+    ];
+    let tipIdx = 0;
+
+    function startFlyInSequence() {
+      const stage = document.getElementById('flyingMascotStage');
+      const backdrop = document.getElementById('mascotBackdrop');
+      const bubble = document.getElementById('speechBubble3D');
+      const timerSpan = document.getElementById('speechCountdown');
+
+      if (!stage || !backdrop || !bubble) return;
+
+      backdrop.classList.add('active');
+
+      // Fly in from top into center stage
+      setTimeout(() => {
+        stage.classList.remove('phase-offscreen');
+        stage.classList.add('phase-center');
+      }, 300);
+
+      // Spring speech bubble
+      setTimeout(() => {
+        bubble.classList.add('visible');
+
+        secondsLeft = 4;
+        countdownInterval = setInterval(() => {
+          secondsLeft--;
+          if (secondsLeft > 0) {
+            timerSpan.innerText = `Docking in ${secondsLeft}s...`;
+          } else {
+            clearInterval(countdownInterval);
+            mascotFlyToDock();
+          }
+        }, 1000);
+      }, 1100);
+    }
+
+    function mascotFlyToDock() {
+      if (countdownInterval) clearInterval(countdownInterval);
+      const stage = document.getElementById('flyingMascotStage');
+      const backdrop = document.getElementById('mascotBackdrop');
+      const bubble = document.getElementById('speechBubble3D');
+
+      if (!stage || !backdrop || !bubble) return;
+
+      backdrop.classList.remove('active');
+      bubble.classList.remove('visible');
+
+      setTimeout(() => {
+        stage.classList.remove('phase-center');
+        stage.classList.add('phase-docked');
+        isDocked = true;
+      }, 200);
+    }
+
+    function mascotFlyToCenter() {
+      const stage = document.getElementById('flyingMascotStage');
+      const backdrop = document.getElementById('mascotBackdrop');
+      const bubble = document.getElementById('speechBubble3D');
+      const title = document.getElementById('speechTitle');
+      const text = document.getElementById('speechText');
+      const timerSpan = document.getElementById('speechCountdown');
+
+      if (!stage) return;
+
+      title.innerText = "Turbo's Pit Stop Advice";
+      text.innerText = "Looking for 9H ceramic or full XPEL stealth armor? Tap Ceramic & PPF to view pricing, or Reserve Bay to lock your slot!";
+      timerSpan.innerText = "";
+
+      backdrop.classList.add('active');
+      stage.classList.remove('phase-docked');
+      stage.classList.add('phase-center');
+      isDocked = false;
+
+      setTimeout(() => {
+        bubble.classList.add('visible');
+      }, 600);
+    }
+
+    function toggleMascotInteraction() {
+      if (!isDocked) {
+        mascotFlyToDock();
+        return;
+      }
+      const bubble = document.getElementById('speechBubble3D');
+      const title = document.getElementById('speechTitle');
+      const text = document.getElementById('speechText');
+      const timerSpan = document.getElementById('speechCountdown');
+
+      tipIdx = (tipIdx + 1) % turboTips.length;
+      title.innerText = "Turbo's Detailing Tip";
+      text.innerText = turboTips[tipIdx];
+      timerSpan.innerHTML = '<a href="javascript:void(0)" onclick="mascotFlyToCenter()" style="color:var(--track-gold);font-weight:700;">Replay Launch ↗</a>';
+
+      bubble.classList.toggle('dock-open');
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(startFlyInSequence, 700);
+    });
+  </script>
+
+</body>
+</html>

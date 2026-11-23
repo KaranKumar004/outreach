@@ -1,0 +1,1659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Vance Dental Studio | Austin, TX • History, Treatments & Care</title>
+  <meta name="description" content="Established 2012 in Northwest Austin. Dr. Marcus Vance, DDS provides anxiety-free dentistry, $99 new patient specials, 3D implants & evening hours. Call (512) 840-2190.">
+
+  <!-- OpenGraph Metadata -->
+  <meta property="og:title" content="Vance Dental Studio | Austin, TX">
+  <meta property="og:description" content="14 years of anxiety-free family dentistry on Far West Blvd, Austin. $99 New Patient Special & upfront pricing.">
+  <meta property="og:image" content="assets/clinic_hero.jpg">
+  <meta property="og:type" content="website">
+
+  <!-- Google Fonts: Plus Jakarta Sans & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- JSON-LD Local Business Schema -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Dentist",
+    "name": "Vance Dental Studio",
+    "founder": "Dr. Marcus Vance, DDS",
+    "foundingDate": "2012",
+    "image": "assets/clinic_hero.jpg",
+    "telephone": "(512) 840-2190",
+    "email": "info@vancedentalstudio.com",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "3410 Far West Blvd, Suite 210",
+      "addressLocality": "Austin",
+      "addressRegion": "TX",
+      "postalCode": "78731",
+      "addressCountry": "US"
+    },
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": 30.3548,
+      "longitude": -97.7571
+    },
+    "priceRange": "$$"
+  }
+  
+    // ========================================================
+    // CINEMATIC FLYING MASCOT CONTROLLER
+    // ========================================================
+    let mascotDockTimer = null;
+    let countdownInterval = null;
+    let secondsLeft = 4;
+    let isDocked = false;
+
+    function startFlyInSequence() {
+      const stage = document.getElementById('flyingMascotStage');
+      const backdrop = document.getElementById('mascotBackdrop');
+      const bubble = document.getElementById('speechBubble3D');
+      const timerSpan = document.getElementById('speechCountdown');
+
+      if (!stage || !backdrop || !bubble) return;
+
+      // 1. Activate backdrop
+      backdrop.classList.add('active');
+
+      // 2. Fly in from top into center stage
+      setTimeout(() => {
+        stage.classList.remove('phase-offscreen');
+        stage.classList.add('phase-center');
+      }, 300);
+
+      // 3. Reveal speech bubble with spring pop
+      setTimeout(() => {
+        bubble.classList.add('visible');
+
+        // Start countdown timer to glide to dock
+        secondsLeft = 4;
+        countdownInterval = setInterval(() => {
+          secondsLeft--;
+          if (secondsLeft > 0) {
+            timerSpan.innerText = `Docking in ${secondsLeft}s...`;
+          } else {
+            clearInterval(countdownInterval);
+            mascotFlyToDock();
+          }
+        }, 1000);
+      }, 1100);
+    }
+
+    function mascotFlyToDock() {
+      if (countdownInterval) clearInterval(countdownInterval);
+      const stage = document.getElementById('flyingMascotStage');
+      const backdrop = document.getElementById('mascotBackdrop');
+      const bubble = document.getElementById('speechBubble3D');
+
+      if (!stage || !backdrop || !bubble) return;
+
+      // Close backdrop and hide center bubble
+      backdrop.classList.remove('active');
+      bubble.classList.remove('visible');
+
+      // Glide smoothly to bottom-right corner dock
+      setTimeout(() => {
+        stage.classList.remove('phase-center');
+        stage.classList.add('phase-docked');
+        isDocked = true;
+      }, 200);
+    }
+
+    function mascotFlyToCenter() {
+      const stage = document.getElementById('flyingMascotStage');
+      const backdrop = document.getElementById('mascotBackdrop');
+      const bubble = document.getElementById('speechBubble3D');
+      const title = document.getElementById('speechTitle');
+      const text = document.getElementById('speechText');
+      const timerSpan = document.getElementById('speechCountdown');
+
+      if (!stage) return;
+
+      title.innerText = "Mr. Tooth is Ready to Help!";
+      text.innerText = "Need an appointment, have questions about dental implants, or looking for our $99 checkup special? Tap Explore or Schedule Visit!";
+      timerSpan.innerText = "";
+
+      backdrop.classList.add('active');
+      stage.classList.remove('phase-docked');
+      stage.classList.add('phase-center');
+      isDocked = false;
+
+      setTimeout(() => {
+        bubble.classList.add('visible');
+      }, 600);
+    }
+
+    function toggleMascotInteraction() {
+      if (!isDocked) {
+        mascotFlyToDock();
+        return;
+      }
+      // If clicked while docked, cycle dental tips or open quick bubble
+      const bubble = document.getElementById('speechBubble3D');
+      const title = document.getElementById('speechTitle');
+      const text = document.getElementById('speechText');
+      const timerSpan = document.getElementById('speechCountdown');
+
+      tipIdx = (tipIdx + 1) % mascotTips.length;
+      title.innerText = "Mr. Tooth's Smile Tip";
+      text.innerText = mascotTips[tipIdx];
+      timerSpan.innerHTML = '<a href="javascript:void(0)" onclick="mascotFlyToCenter()" style="color:var(--mineral-sage);font-weight:700;">Replay Fly-In ↗</a>';
+
+      bubble.classList.toggle('dock-open');
+    }
+
+    // Auto-launch the cinematic sequence after page loads
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(startFlyInSequence, 700);
+    });
+
+  </script>
+
+  <style>
+    :root {
+      /* 4-Color Luxury Architectural Palette (No Sterile White, No Bright/Garish Neons) */
+      --twilight-slate: #0d1527;      /* Color 1: Deep Navy / Slate Noir */
+      --slate-subtle: #17233e;
+      --mineral-sage: #23473b;        /* Color 2: Mineral Eucalyptus Green */
+      --sage-light: #e3ece8;
+      --warm-gold: #b88a38;           /* Color 3: Brushed Architectural Brass/Gold */
+      --gold-light: #f7f3eb;
+      --cashmere-sand: #ece6dc;       /* Color 4: Warm Cashmere Sand / Muted Earth */
+      --card-surface: #f5f1eb;
+      --card-border: #dfd7cb;
+      --text-dark: #121826;
+      --text-muted: #576275;
+      --font-heading: 'Outfit', sans-serif;
+      --font-body: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-body);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--cashmere-sand);
+      color: var(--text-dark);
+      padding-bottom: 95px;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Ambient Subtle Background Particle Canvas */
+    .ambient-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.45;
+    }
+
+    /* Main Container */
+    .app-container {
+      position: relative;
+      z-index: 10;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    /* Top Heritage Banner */
+    .heritage-bar {
+      background: var(--twilight-slate);
+      color: #ffffff;
+      padding: 9px 18px;
+      font-size: 11.5px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .heritage-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .heritage-dot {
+      width: 7px;
+      height: 7px;
+      background: var(--warm-gold);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--warm-gold);
+    }
+
+    /* Primary Navigation Header */
+    header {
+      background: rgba(245, 241, 235, 0.96);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+      padding: 14px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 60;
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-crest {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, var(--twilight-slate), var(--mineral-sage));
+      border-radius: 12px;
+      border: 1.5px solid var(--warm-gold);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 14px rgba(13, 21, 39, 0.2);
+    }
+    .brand-crest svg {
+      width: 24px;
+      height: 24px;
+      fill: none;
+      stroke: var(--warm-gold);
+      stroke-width: 2.2;
+    }
+    .brand-text h1 {
+      font-family: var(--font-heading);
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--twilight-slate);
+      line-height: 1.15;
+    }
+    .brand-text p {
+      font-size: 11px;
+      color: var(--mineral-sage);
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    .btn-header-call {
+      background: var(--twilight-slate);
+      color: #ffffff;
+      font-size: 12.5px;
+      font-weight: 700;
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--warm-gold);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    /* Multi-Page Navigation Bar */
+    .nav-tabs-wrapper {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+    }
+    .nav-tabs-wrapper::-webkit-scrollbar {
+      display: none;
+    }
+    .nav-tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 7px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+    .nav-tab-btn.active {
+      background: var(--twilight-slate);
+      color: #ffffff;
+      border-color: var(--twilight-slate);
+      box-shadow: 0 2px 8px rgba(13, 21, 39, 0.2);
+    }
+    .nav-tab-btn:hover:not(.active) {
+      color: var(--twilight-slate);
+      background: rgba(223, 215, 203, 0.4);
+    }
+
+    /* Page Views */
+    .page-view {
+      display: none;
+      animation: fadeInPage 0.25s ease-out;
+    }
+    .page-view.active {
+      display: block;
+    }
+    @keyframes fadeInPage {
+      0% { opacity: 0; transform: translateY(6px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Common Card Styling */
+    .content-card {
+      background: var(--card-surface);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 22px;
+      margin: 18px 20px;
+      box-shadow: 0 8px 20px -8px rgba(13, 21, 39, 0.06);
+    }
+
+    /* PAGE 1: HOME */
+    .home-hero {
+      position: relative;
+      margin: 18px 20px;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 12px 30px -10px rgba(13, 21, 39, 0.15);
+    }
+    .home-hero img {
+      width: 100%;
+      height: 230px;
+      object-fit: cover;
+      display: block;
+    }
+    .home-hero-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(13, 21, 39, 0.4) 0%, rgba(13, 21, 39, 0.92) 100%);
+      padding: 20px;
+      display: flex;
+      flex-col: column;
+      justify-content: flex-end;
+      color: #ffffff;
+    }
+    .hero-badge-pill {
+      background: var(--warm-gold);
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 8px;
+      width: fit-content;
+    }
+    .home-hero-overlay h2 {
+      font-family: var(--font-heading);
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.25;
+      margin-bottom: 6px;
+    }
+    .home-hero-overlay p {
+      font-size: 13px;
+      color: #e2e8f0;
+      line-height: 1.45;
+    }
+
+    /* 3D Mascot Stage */
+    .mascot-banner {
+      background: linear-gradient(135deg, var(--card-surface), var(--sage-light));
+      border: 1px solid #c7d8d1;
+      border-radius: 18px;
+      padding: 16px;
+      margin: 0 20px 18px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(35, 71, 59, 0.08);
+    }
+    .mascot-avatar {
+      width: 76px;
+      height: 76px;
+      flex-shrink: 0;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 2px solid var(--mineral-sage);
+      box-shadow: 0 4px 12px rgba(35, 71, 59, 0.2);
+    }
+    .mascot-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .mascot-bubble {
+      flex: 1;
+      background: #ffffff;
+      border: 1px solid #b3cac0;
+      border-radius: 12px;
+      padding: 10px 12px;
+      position: relative;
+    }
+    .mascot-bubble h5 {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--mineral-sage);
+      margin-bottom: 2px;
+    }
+    .mascot-bubble p {
+      font-size: 12px;
+      color: var(--text-dark);
+      line-height: 1.4;
+    }
+    .mascot-bubble span {
+      font-size: 10px;
+      color: var(--warm-gold);
+      font-weight: 700;
+      display: block;
+      margin-top: 4px;
+    }
+
+    /* PAGE 2: HISTORY & HERITAGE */
+    .timeline-item {
+      position: relative;
+      padding-left: 28px;
+      margin-bottom: 22px;
+    }
+    .timeline-item:last-child {
+      margin-bottom: 0;
+    }
+    .timeline-marker {
+      position: absolute;
+      left: 0;
+      top: 4px;
+      width: 14px;
+      height: 14px;
+      background: var(--warm-gold);
+      border-radius: 50%;
+      border: 3px solid var(--card-surface);
+      box-shadow: 0 0 0 2px var(--warm-gold);
+    }
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: 6px;
+      top: 20px;
+      bottom: -16px;
+      width: 2px;
+      background: var(--card-border);
+    }
+    .timeline-item:last-child::before {
+      display: none;
+    }
+    .timeline-year {
+      font-family: var(--font-heading);
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--mineral-sage);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .timeline-title {
+      font-family: var(--font-heading);
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--twilight-slate);
+      margin: 2px 0 4px 0;
+    }
+    .timeline-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Founder Bio Card */
+    .founder-card {
+      background: var(--twilight-slate);
+      color: #ffffff;
+      border-radius: 18px;
+      padding: 22px;
+      margin: 18px 20px;
+      box-shadow: 0 10px 25px rgba(13, 21, 39, 0.2);
+    }
+    .founder-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .founder-img {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--warm-gold);
+    }
+    .founder-meta h4 {
+      font-family: var(--font-heading);
+      font-size: 16px;
+      font-weight: 800;
+      color: #ffffff;
+    }
+    .founder-meta span {
+      font-size: 12px;
+      color: var(--warm-gold);
+      font-weight: 700;
+    }
+    .founder-quote {
+      font-size: 13.5px;
+      color: #cbd5e1;
+      font-style: italic;
+      line-height: 1.6;
+    }
+
+    /* PAGE 3: TREATMENTS & FEES */
+    .treatment-row {
+      background: #ffffff;
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+    .treatment-row:hover {
+      border-color: var(--mineral-sage);
+      transform: translateX(2px);
+    }
+    .treatment-details h5 {
+      font-family: var(--font-heading);
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--twilight-slate);
+      margin-bottom: 3px;
+    }
+    .treatment-details p {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .treatment-badge {
+      display: inline-block;
+      margin-top: 5px;
+      font-size: 10.5px;
+      font-weight: 800;
+      background: var(--sage-light);
+      color: var(--mineral-sage);
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+    .treatment-price {
+      text-align: right;
+      min-width: 95px;
+    }
+    .price-tag {
+      font-family: var(--font-heading);
+      font-size: 17px;
+      font-weight: 900;
+      color: var(--twilight-slate);
+    }
+    .price-btn {
+      font-size: 11px;
+      color: var(--mineral-sage);
+      font-weight: 800;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    /* PAGE 4: SCHEDULE APPOINTMENT (REAL INTERACTIVE ENGINE) */
+    .form-group-custom {
+      margin-bottom: 14px;
+    }
+    .form-group-custom label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 800;
+      color: var(--twilight-slate);
+      margin-bottom: 6px;
+    }
+    .input-field-custom {
+      width: 100%;
+      padding: 13px 14px;
+      border: 1.5px solid var(--card-border);
+      border-radius: 10px;
+      font-size: 14px;
+      background: #ffffff;
+      color: var(--text-dark);
+      transition: all 0.2s ease;
+    }
+    .input-field-custom:focus {
+      outline: none;
+      border-color: var(--mineral-sage);
+      box-shadow: 0 0 0 3px rgba(35, 71, 59, 0.15);
+    }
+    .btn-submit-main {
+      width: 100%;
+      background: var(--twilight-slate);
+      color: #ffffff;
+      border: 1px solid var(--warm-gold);
+      padding: 15px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 8px 20px rgba(13, 21, 39, 0.25);
+      transition: all 0.2s ease;
+    }
+    .btn-submit-main:hover {
+      background: var(--mineral-sage);
+      transform: translateY(-2px);
+    }
+
+    /* PAGE 5: GET IN CONTACT */
+    .contact-card-item {
+      background: #ffffff;
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .contact-icon-box {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--sage-light);
+      color: var(--mineral-sage);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .contact-details h6 {
+      font-family: var(--font-heading);
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--twilight-slate);
+      margin-bottom: 3px;
+    }
+    .contact-details p {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+
+    /* Modal Confirmation */
+    .custom-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(13, 21, 39, 0.7);
+      backdrop-filter: blur(5px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-inner {
+      background: #ffffff;
+      border: 1px solid var(--warm-gold);
+      border-radius: 20px;
+      padding: 28px;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    }
+    .modal-check {
+      width: 60px;
+      height: 60px;
+      background: var(--sage-light);
+      color: var(--mineral-sage);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 14px auto;
+    }
+
+    /* Sticky Bottom Action Bar */
+    .sticky-bottom-dock {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(13, 21, 39, 0.96);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 11px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 90;
+      color: #ffffff;
+    }
+    .dock-meta span:first-child {
+      display: block;
+      font-size: 10.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--warm-gold);
+    }
+    .dock-meta span:last-child {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 800;
+    }
+    .dock-buttons {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-dock-call {
+      background: rgba(255,255,255,0.1);
+      color: #ffffff;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .btn-dock-book {
+      background: var(--warm-gold);
+      color: #ffffff;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 800;
+      border: none;
+      cursor: pointer;
+    }
+  
+    /* ========================================================
+       CINEMATIC FLYING 3D MASCOT STAGE (MR. TOOTH)
+       ======================================================== */
+    .mascot-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(13, 21, 39, 0.65);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 990;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .mascot-backdrop.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .flying-mascot-container {
+      position: fixed;
+      z-index: 995;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: all 0.95s cubic-bezier(0.19, 1, 0.22, 1);
+      will-change: transform, top, left, right, bottom, opacity;
+    }
+
+    /* Phase 1: Off-screen top before flying in */
+    .flying-mascot-container.phase-offscreen {
+      top: -220px;
+      left: 50%;
+      transform: translate(-50%, -100%) scale(0.2) rotate(-35deg);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Phase 2: Center of screen with 3D floating hover */
+    .flying-mascot-container.phase-center {
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(1.15) rotate(0deg);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* Phase 3: Gliding to bottom-right dock */
+    .flying-mascot-container.phase-docked {
+      top: auto;
+      bottom: 85px;
+      left: auto;
+      right: 20px;
+      transform: translate(0, 0) scale(0.85);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* 3D Mascot Character Figure */
+    .mascot-figure-3d {
+      position: relative;
+      width: 140px;
+      height: 140px;
+      cursor: pointer;
+      user-select: none;
+      filter: drop-shadow(0 15px 30px rgba(0,0,0,0.4));
+      animation: floatIdle 3s ease-in-out infinite;
+      transition: transform 0.3s ease;
+    }
+    .flying-mascot-container.phase-docked .mascot-figure-3d {
+      width: 105px;
+      height: 105px;
+      filter: drop-shadow(0 8px 20px rgba(0,0,0,0.3));
+    }
+    .mascot-figure-3d:hover {
+      transform: scale(1.08) rotate(3deg);
+    }
+
+    .mascot-img-3d {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 4px solid var(--warm-gold);
+      box-shadow: 0 0 0 4px rgba(184, 138, 56, 0.3), 0 12px 28px rgba(0,0,0,0.35);
+      background: #ffffff;
+    }
+
+    .mascot-badge-live {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      background: #16a34a;
+      color: #ffffff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 12px;
+      border: 2px solid #ffffff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .mascot-badge-live::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: #ffffff;
+      border-radius: 50%;
+      animation: pulseLive 1.5s infinite;
+    }
+
+    /* Dynamic 3D Speech Bubble */
+    .speech-bubble-3d {
+      background: #ffffff;
+      color: var(--twilight-slate);
+      border-radius: 18px;
+      padding: 16px 20px;
+      max-width: 340px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.06);
+      margin-bottom: 16px;
+      position: relative;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(12px) scale(0.92);
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .speech-bubble-3d.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    .speech-bubble-3d::after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 10px 10px 0;
+      border-style: solid;
+      border-color: #ffffff transparent;
+      display: block;
+      width: 0;
+    }
+
+    /* Compact docked speech bubble behavior */
+    .flying-mascot-container.phase-docked .speech-bubble-3d {
+      position: absolute;
+      bottom: 115px;
+      right: 0;
+      margin-bottom: 0;
+      max-width: 280px;
+      display: none;
+      text-align: left;
+    }
+    .flying-mascot-container.phase-docked .speech-bubble-3d.dock-open {
+      display: block;
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    .flying-mascot-container.phase-docked .speech-bubble-3d::after {
+      left: auto;
+      right: 36px;
+      transform: none;
+    }
+
+    .speech-tag {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--mineral-sage);
+      margin-bottom: 4px;
+    }
+    .speech-title {
+      font-family: var(--font-heading);
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--twilight-slate);
+      margin: 0 0 6px 0;
+    }
+    .speech-text {
+      font-size: 13px;
+      line-height: 1.45;
+      color: #475569;
+      margin: 0 0 14px 0;
+    }
+    .speech-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    .btn-mascot-primary {
+      background: var(--twilight-slate);
+      color: #ffffff;
+      border: none;
+      padding: 9px 18px;
+      border-radius: 9px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(13, 21, 39, 0.25);
+      transition: background 0.2s ease;
+    }
+    .btn-mascot-primary:hover {
+      background: var(--mineral-sage);
+    }
+    .speech-timer {
+      font-size: 11px;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    @keyframes floatIdle {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-10px) rotate(2deg); }
+    }
+    @keyframes pulseLive {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- Background Particle Canvas -->
+  <canvas id="ambientCanvas" class="ambient-canvas"></canvas>
+
+  <div class="app-container">
+
+    <!-- Top Heritage Bar -->
+    <div class="heritage-bar">
+      <div class="heritage-bar-left">
+        <span class="heritage-dot"></span>
+        <span>Est. 2012 • 14 Years Serving Northwest Austin</span>
+      </div>
+      <span style="color:var(--warm-gold); font-weight:700;">Zero Corporate Ownership</span>
+    </div>
+
+    <!-- Header with Multi-Page Navigation Tabs -->
+    <header>
+      <div class="header-top">
+        <div class="brand-group">
+          <div class="brand-crest">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 2C8 2 6 5 6 8c0 4 2 7 3 11 1 3 2 3 3 1 1 2 2 2 3-1 1-4 3-7 3-11 0-3-2-6-6-6z"/>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <h1>Vance Dental Studio</h1>
+            <p>Far West Blvd, Austin, TX</p>
+          </div>
+        </div>
+        <a href="tel:5128402190" class="btn-header-call">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          (512) 840-2190
+        </a>
+      </div>
+
+      <!-- Navigation Bar (5 Pages) -->
+      <nav class="nav-tabs-wrapper">
+        <button onclick="navigatePage('home')" id="tab-home" class="nav-tab-btn active">Home</button>
+        <button onclick="navigatePage('history')" id="tab-history" class="nav-tab-btn">Our Story & History</button>
+        <button onclick="navigatePage('treatments')" id="tab-treatments" class="nav-tab-btn">Treatments & Fees</button>
+        <button onclick="navigatePage('schedule')" id="tab-schedule" class="nav-tab-btn">Schedule Visit</button>
+        <button onclick="navigatePage('contact')" id="tab-contact" class="nav-tab-btn">Get in Contact</button>
+      </nav>
+    </header>
+
+    <!-- ========================================== -->
+    <!-- PAGE 1: HOME -->
+    <!-- ========================================== -->
+    <div id="page-home" class="page-view active">
+
+      <!-- Hero Banner -->
+      <div class="home-hero">
+        <img src="assets/clinic_hero.jpg" alt="Vance Dental Studio Reception">
+        <div class="home-hero-overlay">
+          <span class="hero-badge-pill">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            $99 New Patient Special (Exam, Cleaning & 3D X-Rays)
+          </span>
+          <h2>Painless, High-Tech Dentistry for the Whole Family</h2>
+          <p>Gentle care, transparent pricing, and zero lectures. Experience Austin’s most relaxing dental visit.</p>
+        </div>
+      </div>
+
+      <!-- 3D Mascot Banner: Mr. Tooth -->
+      <div class="mascot-banner" onclick="cycleMrTooth()">
+        <div class="mascot-avatar">
+          <img src="assets/mr_tooth.jpg" alt="Mr. Tooth">
+        </div>
+        <div class="mascot-bubble">
+          <h5>Meet Mr. Tooth (Practice Mascot)</h5>
+          <p id="homeMascotText">"Hi Austin! Nervous about checkups? Don't be! Dr. Vance is super gentle and our $99 special has zero hidden fees. Tap me for a smile tip!"</p>
+          <span>✨ Tap Mr. Tooth to hear another tip!</span>
+        </div>
+      </div>
+
+      <!-- Quick Core Value Cards -->
+      <div class="content-card">
+        <h3 style="font-family:var(--font-heading); font-size:17px; font-weight:800; color:var(--twilight-slate); margin-bottom:12px;">
+          The Vance Standard of Care
+        </h3>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div style="background:#ffffff; border:1px solid var(--card-border); padding:12px; border-radius:12px;">
+            <div style="font-size:11px; font-weight:800; color:var(--mineral-sage);">ZERO WAIT TIME</div>
+            <p style="font-size:12px; color:var(--text-muted);">We respect your busy schedule; seen within 5 minutes.</p>
+          </div>
+          <div style="background:#ffffff; border:1px solid var(--card-border); padding:12px; border-radius:12px;">
+            <div style="font-size:11px; font-weight:800; color:var(--mineral-sage);">UPFRONT PRICING</div>
+            <p style="font-size:12px; color:var(--text-muted);">Printed price sheet before any treatment begins.</p>
+          </div>
+          <div style="background:#ffffff; border:1px solid var(--card-border); padding:12px; border-radius:12px;">
+            <div style="font-size:11px; font-weight:800; color:var(--warm-gold);">WEDNESDAY EVENINGS</div>
+            <p style="font-size:12px; color:var(--text-muted);">Open until 6:30 PM for working Austin parents.</p>
+          </div>
+          <div style="background:#ffffff; border:1px solid var(--card-border); padding:12px; border-radius:12px;">
+            <div style="font-size:11px; font-weight:800; color:var(--warm-gold);">0% FINANCING</div>
+            <p style="font-size:12px; color:var(--text-muted);">CareCredit & in-house $25/mo membership plan.</p>
+          </div>
+        </div>
+        <div style="margin-top:16px; text-align:center;">
+          <button onclick="navigatePage('schedule')" class="btn-submit-main">
+            Schedule Your $99 New Patient Visit
+          </button>
+        </div>
+      </div>
+
+      <!-- Verified Patient Quote -->
+      <div class="content-card" style="border-left:4px solid var(--mineral-sage);">
+        <div style="font-size:11px; font-weight:800; color:var(--mineral-sage); text-transform:uppercase; margin-bottom:4px;">
+          Verified Patient Experience
+        </div>
+        <p style="font-size:13.5px; font-style:italic; color:#334155; line-height:1.6;">
+          "After four years of avoiding the dentist because of severe dental anxiety, Vance Dental changed everything. Genuine warmth and completely painless treatment. My smile is back!"
+        </p>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:12px; font-weight:800; color:var(--twilight-slate);">
+          <span>Sarah M. — Northwest Austin Resident</span>
+          <span style="color:var(--warm-gold);">★★★★★ Google Review</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- PAGE 2: OUR STORY & HISTORY -->
+    <!-- ========================================== -->
+    <div id="page-history" class="page-view">
+
+      <!-- Founder Overview -->
+      <div class="founder-card">
+        <div class="founder-header">
+          <img src="assets/dr_marcus_vance.jpg" alt="Dr. Marcus Vance, DDS" class="founder-img">
+          <div class="founder-meta">
+            <h4>Dr. Marcus Vance, DDS</h4>
+            <span>Founder & Clinical Director • Est. 2012</span>
+          </div>
+        </div>
+        <p class="founder-quote">
+          "I grew up terrified of the dental chair. The sterile chemical smells, the cold reprimands about flossing, and the surprise invoices made me dread appointments for years. When I graduated from dental school, I vowed to build the exact opposite: an anxiety-free sanctuary with natural wood, gentle touch, and complete price transparency."
+        </p>
+      </div>
+
+      <!-- 14-Year Practice Timeline -->
+      <div class="content-card">
+        <h3 style="font-family:var(--font-heading); font-size:18px; font-weight:800; color:var(--twilight-slate); margin-bottom:18px;">
+          The 14-Year Journey of Vance Dental Studio
+        </h3>
+
+        <div class="timeline-item">
+          <div class="timeline-marker"></div>
+          <div class="timeline-year">2012 • The Founding</div>
+          <div class="timeline-title">2 Chairs on Far West Blvd</div>
+          <div class="timeline-desc">
+            Dr. Vance opened the practice with just two operatories and a single hygienist, committed to spending a full 60 minutes with every patient to address dental fear.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-marker"></div>
+          <div class="timeline-year">2016 • Pediatric & Family Expansion</div>
+          <div class="timeline-title">Introducing "Mr. Tooth" & Anxiety Protocols</div>
+          <div class="timeline-desc">
+            Introduced topical micro-numbing gels and our friendly mascot "Mr. Tooth" to eliminate needle anxiety for young children and nervous adults alike.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-marker"></div>
+          <div class="timeline-year">2020 • High-Tech Modernization</div>
+          <div class="timeline-title">3D Digital iTero & Guided Implants</div>
+          <div class="timeline-desc">
+            Replaced uncomfortable silicone impression putty with low-radiation 3D optical scanning, enabling single-day digital crowns and computer-guided implants.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-marker"></div>
+          <div class="timeline-year">2026 • Present Day</div>
+          <div class="timeline-title">5,200+ Austin Smiles Restored</div>
+          <div class="timeline-desc">
+            Now Austin's most trusted independent private clinic, featuring our $25/mo In-House Savings Plan for uninsured families and Wednesday evening hours until 6:30 PM.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- PAGE 3: TREATMENTS & FEES -->
+    <!-- ========================================== -->
+    <div id="page-treatments" class="page-view">
+      <div class="content-card">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:16px;">
+          <h3 style="font-family:var(--font-heading); font-size:18px; font-weight:800; color:var(--twilight-slate);">
+            Transparent Fee Schedule
+          </h3>
+          <span style="font-size:12px; font-weight:700; color:var(--mineral-sage);">No Hidden Costs</span>
+        </div>
+
+        <div class="treatment-row">
+          <div class="treatment-details">
+            <h5>Comprehensive Exam, Cleaning & 3D Bite-Wing X-Rays</h5>
+            <p>Full oral cancer screening, periodontal evaluation & digital bite-wing imaging</p>
+            <span class="treatment-badge">New Patient Special</span>
+          </div>
+          <div class="treatment-price">
+            <div class="price-tag">$99</div>
+            <span onclick="navigatePage('schedule')" class="price-btn">Book Slot</span>
+          </div>
+        </div>
+
+        <div class="treatment-row">
+          <div class="treatment-details">
+            <h5>Laser In-Office Teeth Whitening</h5>
+            <p>Professional enamel-safe laser treatment; 6 shades brighter in 45 minutes</p>
+          </div>
+          <div class="treatment-price">
+            <div class="price-tag">$349</div>
+            <span onclick="navigatePage('schedule')" class="price-btn">Book Slot</span>
+          </div>
+        </div>
+
+        <div class="treatment-row">
+          <div class="treatment-details">
+            <h5>Single-Tooth Titanium Dental Implant</h5>
+            <p>Complete surgical placement, custom titanium abutment & porcelain crown</p>
+          </div>
+          <div class="treatment-price">
+            <div class="price-tag">From $1,850</div>
+            <span onclick="navigatePage('schedule')" class="price-btn">Free Consult</span>
+          </div>
+        </div>
+
+        <div class="treatment-row">
+          <div class="treatment-details">
+            <h5>Invisalign Clear Aligners</h5>
+            <p>Discreet digital orthodontic realignment with 3D outcome simulation</p>
+          </div>
+          <div class="treatment-price">
+            <div class="price-tag">From $2,800</div>
+            <span onclick="navigatePage('schedule')" class="price-btn">0% Financing</span>
+          </div>
+        </div>
+
+        <div class="treatment-row">
+          <div class="treatment-details">
+            <h5>Same-Day Emergency Pain Relief</h5>
+            <p>Urgent toothache relief, broken restorations, root canals, and abscess treatment</p>
+          </div>
+          <div class="treatment-price">
+            <div class="price-tag">$149</div>
+            <span onclick="navigatePage('schedule')" class="price-btn">Walk-Ins OK</span>
+          </div>
+        </div>
+
+        <!-- Financing Box -->
+        <div style="background:var(--gold-light); border:1px solid #e8dbbe; border-radius:12px; padding:14px; margin-top:16px;">
+          <div style="font-size:12.5px; font-weight:800; color:var(--warm-gold); margin-bottom:4px;">
+            💳 In-House $25/Month Savings Plan & 0% CareCredit
+          </div>
+          <p style="font-size:12px; color:#576275; line-height:1.45;">
+            No dental insurance? Our membership plan includes 2 professional cleanings, all digital X-rays, plus 20% off all restorative procedures with zero deductibles or waiting periods.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- PAGE 4: SCHEDULE APPOINTMENT -->
+    <!-- ========================================== -->
+    <div id="page-schedule" class="page-view">
+      <div class="content-card">
+        <h3 style="font-family:var(--font-heading); font-size:18px; font-weight:800; color:var(--twilight-slate); margin-bottom:4px;">
+          Schedule an Appointment
+        </h3>
+        <p style="font-size:12.5px; color:var(--text-muted); margin-bottom:18px;">
+          Select your preferred service and time. Our front desk will confirm within 15 minutes.
+        </p>
+
+        <form id="scheduleForm" onsubmit="handleMultiPageBooking(event)">
+          <div class="form-group-custom">
+            <label>Your Full Name</label>
+            <input type="text" id="mName" class="input-field-custom" placeholder="e.g. John Miller" required>
+          </div>
+          <div class="form-group-custom">
+            <label>Phone Number (for SMS Confirmation)</label>
+            <input type="tel" id="mPhone" class="input-field-custom" placeholder="(512) 555-0123" required>
+          </div>
+          <div class="form-group-custom">
+            <label>Service or Treatment</label>
+            <select id="mService" class="input-field-custom">
+              <option>$99 New Patient Special (Exam, Cleaning & 3D X-Rays)</option>
+              <option>Laser Teeth Whitening ($349)</option>
+              <option>Dental Implants Free Consultation</option>
+              <option>Invisalign Clear Aligners</option>
+              <option>Same-Day Emergency Pain Relief ($149)</option>
+              <option>Routine Checkup & Cleaning</option>
+            </select>
+          </div>
+          <div class="form-group-custom">
+            <label>Preferred Day & Time Window</label>
+            <select id="mWindow" class="input-field-custom">
+              <option>Morning (8:00 AM – 12:00 PM)</option>
+              <option>Afternoon (1:00 PM – 5:00 PM)</option>
+              <option>Wednesday Evening (5:00 PM – 6:30 PM for Working Parents)</option>
+              <option>Next Available Today</option>
+            </select>
+          </div>
+          <div class="form-group-custom">
+            <label>Are You an Existing or New Patient?</label>
+            <select id="mType" class="input-field-custom">
+              <option>New Patient (First Visit to Vance Dental)</option>
+              <option>Existing Patient (Returning Family)</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn-submit-main">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Confirm & Reserve Time Slot
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- PAGE 5: GET IN CONTACT -->
+    <!-- ========================================== -->
+    <div id="page-contact" class="page-view">
+      <div class="content-card">
+        <h3 style="font-family:var(--font-heading); font-size:18px; font-weight:800; color:var(--twilight-slate); margin-bottom:14px;">
+          Visit Vance Dental Studio
+        </h3>
+
+        <div class="contact-card-item">
+          <div class="contact-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <div class="contact-details">
+            <h6>Clinic Address & Parking</h6>
+            <p>3410 Far West Blvd, Suite 210, Austin, TX 78731<br>Located in the Northwest Hills Medical Plaza. Dedicated free patient parking is reserved in front of Suite 210.</p>
+          </div>
+        </div>
+
+        <div class="contact-card-item">
+          <div class="contact-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div class="contact-details">
+            <h6>Office Hours (Working-Parent Schedule)</h6>
+            <p>
+              Monday, Tuesday, Thursday: 8:00 AM – 5:00 PM<br>
+              <strong style="color:var(--mineral-sage);">Wednesday: 8:00 AM – 6:30 PM (Evening Hours)</strong><br>
+              Friday: 8:00 AM – 2:00 PM<br>
+              Saturday: By Special Request • Sunday: Emergency On-Call
+            </p>
+          </div>
+        </div>
+
+        <div class="contact-card-item">
+          <div class="contact-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </div>
+          <div class="contact-details">
+            <h6>Direct Lines</h6>
+            <p>
+              Front Desk & Inquiries: <a href="tel:5128402190" style="color:var(--twilight-slate); font-weight:800;">(512) 840-2190</a><br>
+              Direct Email: <a href="mailto:info@vancedentalstudio.com" style="color:var(--mineral-sage); font-weight:700;">info@vancedentalstudio.com</a>
+            </p>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;">
+          <a href="https://maps.google.com/?q=3410+Far+West+Blvd+Austin+TX" target="_blank" class="btn-submit-main" style="text-decoration:none;">
+            Open Directions in Google Maps ↗
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Sticky Bottom Dock -->
+  <div class="sticky-bottom-dock">
+    <div class="dock-meta">
+      <span>Wednesday Evenings Open</span>
+      <span>Until 6:30 PM (Working Parents)</span>
+    </div>
+    <div class="dock-buttons">
+      <a href="tel:5128402190" class="btn-dock-call">📞 Call</a>
+      <button onclick="navigatePage('schedule')" class="btn-dock-book">Schedule Visit</button>
+    </div>
+  </div>
+
+  <!-- Real Modal Confirmation -->
+  <div id="bookingModal" class="custom-modal">
+    <div class="modal-inner">
+      <div class="modal-check">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h4 style="font-family:var(--font-heading); font-size:18px; font-weight:800; color:var(--twilight-slate); margin-bottom:8px;">
+        Appointment Transmitted!
+      </h4>
+      <p id="modalMsg" style="font-size:13px; color:#576275; line-height:1.5; margin-bottom:16px;">
+        Your appointment request has been transmitted directly to Vance Dental Studio's scheduling board.
+      </p>
+      <div style="background:var(--sage-light); border:1px solid #c7d8d1; border-radius:10px; padding:10px; font-size:12px; color:var(--mineral-sage); font-weight:700; margin-bottom:18px;">
+        Reference: <span id="modalRef">#VNC-9842</span> • SMS Confirmation Active
+      </div>
+      <button onclick="closeModal()" class="btn-submit-main" style="padding:10px 20px;">
+        Close & Return
+      </button>
+    </div>
+  </div>
+
+  <!-- JavaScript: Multi-Page Router, Ambient Canvas & Mascot Engine -->
+  <script>
+    // 1. Multi-Page Navigation Router
+    function navigatePage(pageId) {
+      // Hide all pages
+      document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));
+      // Remove active from all tabs
+      document.querySelectorAll('.nav-tab-btn').forEach(t => t.classList.remove('active'));
+
+      // Show selected page
+      const targetPage = document.getElementById('page-' + pageId);
+      const targetTab = document.getElementById('tab-' + pageId);
+
+      if (targetPage && targetTab) {
+        targetPage.classList.add('active');
+        targetTab.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+
+    // 2. Ambient Canvas Particles
+    const canvas = document.getElementById('ambientCanvas');
+    const ctx = canvas.getContext('2d');
+    let w = canvas.width = window.innerWidth;
+    let h = canvas.height = window.innerHeight;
+
+    window.addEventListener('resize', () => {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    });
+
+    const particles = Array.from({ length: 22 }, () => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      size: Math.random() * 3 + 1.2,
+      vx: (Math.random() - 0.5) * 0.35,
+      vy: (Math.random() - 0.5) * 0.35,
+      color: Math.random() > 0.5 ? 'rgba(184, 138, 56, 0.4)' : 'rgba(35, 71, 59, 0.35)'
+    }));
+
+    function renderParticles() {
+      ctx.clearRect(0, 0, w, h);
+      particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0) p.x = w;
+        if (p.x > w) p.x = 0;
+        if (p.y < 0) p.y = h;
+        if (p.y > h) p.y = 0;
+
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      requestAnimationFrame(renderParticles);
+    }
+    renderParticles();
+
+    // 3. Mr. Tooth Dialogue Engine
+    const mascotTips = [
+      "Fun fact: Dr. Vance grew up terrified of dentists! That's why he built this clinic with zero pain and zero judgment. ✨",
+      "Did you know our $99 special includes digital 3D bite-wing X-rays? That saves you over $280 on day one! 🦷",
+      "Working late? We keep our doors open until 6:30 PM every Wednesday so parents don't have to miss work! ⏰",
+      "No dental insurance? Check out our $25/month In-House Savings Plan—it includes two cleanings a year! 💳",
+      "Thinking about whitening? Our laser in-office treatment gets your smile 6 shades brighter in 45 minutes! 🌟"
+    ];
+    let tipIdx = 0;
+
+    function cycleMrTooth() {
+      tipIdx = (tipIdx + 1) % mascotTips.length;
+      document.getElementById('homeMascotText').innerText = `"${mascotTips[tipIdx]}"`;
+    }
+
+    // 4. Interactive Booking Engine
+    function handleMultiPageBooking(e) {
+      e.preventDefault();
+      const name = document.getElementById('mName').value;
+      const phone = document.getElementById('mPhone').value;
+      const service = document.getElementById('mService').value;
+      const win = document.getElementById('mWindow').value;
+      const ref = '#VNC-' + Math.floor(1000 + Math.random() * 9000);
+
+      document.getElementById('modalRef').innerText = ref;
+      document.getElementById('modalMsg').innerText = `Thank you, ${name}! Your slot request for "${service}" (${win}) has been received by Vance Dental Studio. Our team is texting your confirmation to ${phone}.`;
+      document.getElementById('bookingModal').style.display = 'flex';
+      document.getElementById('scheduleForm').reset();
+    }
+
+    function closeModal() {
+      document.getElementById('bookingModal').style.display = 'none';
+      navigatePage('home');
+    }
+  
+    // ========================================================
+    // CINEMATIC FLYING MASCOT CONTROLLER
+    // ========================================================
+    let mascotDockTimer = null;
+    let countdownInterval = null;
+    let secondsLeft = 4;
+    let isDocked = false;
+
+    function startFlyInSequence() {
+      const stage = document.getElementById('flyingMascotStage');
+      const backdrop = document.getElementById('mascotBackdrop');
+      const bubble = document.getElementById('speechBubble3D');
+      const timerSpan = document.getElementById('speechCountdown');
+
+      if (!stage || !backdrop || !bubble) return;
+
+      // 1. Activate backdrop
+      backdrop.classList.add('active');
+
+      // 2. Fly in from top into center stage
+      setTimeout(() => {
+        stage.classList.remove('phase-offscreen');
+        stage.classList.add('phase-center');
+      }, 300);
+
+      // 3. Reveal speech bubble with spring pop
+      setTimeout(() => {
+        bubble.classList.add('visible');
+
+        // Start countdown timer to glide to dock
+        secondsLeft = 4;
+        countdownInterval = setInterval(() => {
+          secondsLeft--;
+          if (secondsLeft > 0) {
+            timerSpan.innerText = `Docking in ${secondsLeft}s...`;
+          } else {
+            clearInterval(countdownInterval);
+            mascotFlyToDock();
+          }
+        }, 1000);
+      }, 1100);
+    }
+
+    function mascotFlyToDock() {
+      if (countdownInterval) clearInterval(countdownInterval);
+      const stage = document.getElementById('flyingMascotStage');
+      const backdrop = document.getElementById('mascotBackdrop');
+      const bubble = document.getElementById('speechBubble3D');
+
+      if (!stage || !backdrop || !bubble) return;
+
+      // Close backdrop and hide center bubble
+      backdrop.classList.remove('active');
+      bubble.classList.remove('visible');
+
+      // Glide smoothly to bottom-right corner dock
+      setTimeout(() => {
+        stage.classList.remove('phase-center');
+        stage.classList.add('phase-docked');
+        isDocked = true;
+      }, 200);
+    }
+
+    function mascotFlyToCenter() {
+      const stage = document.getElementById('flyingMascotStage');
+      const backdrop = document.getElementById('mascotBackdrop');
+      const bubble = document.getElementById('speechBubble3D');
+      const title = document.getElementById('speechTitle');
+      const text = document.getElementById('speechText');
+      const timerSpan = document.getElementById('speechCountdown');
+
+      if (!stage) return;
+
+      title.innerText = "Mr. Tooth is Ready to Help!";
+      text.innerText = "Need an appointment, have questions about dental implants, or looking for our $99 checkup special? Tap Explore or Schedule Visit!";
+      timerSpan.innerText = "";
+
+      backdrop.classList.add('active');
+      stage.classList.remove('phase-docked');
+      stage.classList.add('phase-center');
+      isDocked = false;
+
+      setTimeout(() => {
+        bubble.classList.add('visible');
+      }, 600);
+    }
+
+    function toggleMascotInteraction() {
+      if (!isDocked) {
+        mascotFlyToDock();
+        return;
+      }
+      // If clicked while docked, cycle dental tips or open quick bubble
+      const bubble = document.getElementById('speechBubble3D');
+      const title = document.getElementById('speechTitle');
+      const text = document.getElementById('speechText');
+      const timerSpan = document.getElementById('speechCountdown');
+
+      tipIdx = (tipIdx + 1) % mascotTips.length;
+      title.innerText = "Mr. Tooth's Smile Tip";
+      text.innerText = mascotTips[tipIdx];
+      timerSpan.innerHTML = '<a href="javascript:void(0)" onclick="mascotFlyToCenter()" style="color:var(--mineral-sage);font-weight:700;">Replay Fly-In ↗</a>';
+
+      bubble.classList.toggle('dock-open');
+    }
+
+    // Auto-launch the cinematic sequence after page loads
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(startFlyInSequence, 700);
+    });
+
+  </script>
+
+
+  <!-- Cinematic Flying Mascot & Backdrop -->
+  <div id="mascotBackdrop" class="mascot-backdrop" onclick="mascotFlyToDock()"></div>
+
+  <div id="flyingMascotStage" class="flying-mascot-container phase-offscreen">
+    <div id="speechBubble3D" class="speech-bubble-3d">
+      <div class="speech-tag">3D Interactive Practice Guide</div>
+      <h3 class="speech-title" id="speechTitle">Hi Austin! I'm Mr. Tooth!</h3>
+      <p class="speech-text" id="speechText">
+        Welcome to Vance Dental Studio! Pain-free visits, single-visit guided implants, and our $99 new-patient special. Let's make your smile shine!
+      </p>
+      <div class="speech-actions">
+        <button class="btn-mascot-primary" onclick="mascotFlyToDock()">Explore Practice &rarr;</button>
+        <span class="speech-timer" id="speechCountdown">Docking in 4s...</span>
+      </div>
+    </div>
+
+    <div class="mascot-figure-3d" onclick="toggleMascotInteraction()">
+      <img src="assets/mr_tooth.jpg" alt="Mr. Tooth 3D Mascot" class="mascot-img-3d">
+      <div class="mascot-badge-live">LIVE</div>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -444,12 +444,25 @@ def main():
 
     biz_type = sys.argv[1].lower()
     location = sys.argv[2] if len(sys.argv) > 2 else "Bengaluru"
-    radius = int(sys.argv[3]) if len(sys.argv) > 3 else 3000
+    
+    # Auto-detect country code from location (e.g. "Austin, TX", "London, UK", etc.)
+    loc_lower = location.lower()
+    if any(st in loc_lower for st in [", tx", ", ca", ", fl", ", ny", ", il", "austin", "dallas", "miami", "houston", "usa", "united states"]):
+        country_code = "US"
+        default_radius = 15000
+    elif any(uk in loc_lower for uk in [", uk", "london", "manchester", "birmingham", "united kingdom"]):
+        country_code = "GB"
+        default_radius = 8000
+    else:
+        country_code = DEFAULT_PHONE_COUNTRY
+        default_radius = 3000
+
+    radius = int(sys.argv[3]) if len(sys.argv) > 3 else default_radius
     max_leads = int(sys.argv[4]) if len(sys.argv) > 4 else 30
 
-    leads = run_sourcing(biz_type, location, radius=radius, max_leads=max_leads)
+    leads = run_sourcing(biz_type, location, radius=radius, max_leads=max_leads, country_code=country_code)
     if leads:
-        save_leads_to_csv(leads)
+        save_leads_to_csv(leads, country_code=country_code)
     else:
         print("No new qualifying businesses found without a website in this area.")
 
