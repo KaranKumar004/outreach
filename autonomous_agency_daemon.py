@@ -62,9 +62,10 @@ class LeadClassifier:
 Sheetbolt builds bespoke, ultra-fast (sub-0.8s) multi-page websites for local businesses with 3D animated moving mascots, instant booking engines, and zero monthly hosting fees.
 Pricing: Flat $500 USD total ($250 kickoff deposit / $250 upon delivery). Turnaround: 72 hours.
 Live Portfolio Demos:
-- Dental: https://sheetboltanalytics.netlify.app/demos/vance-dental.html
-- HVAC & Emergency: https://sheetboltanalytics.netlify.app/demos/mile-high-hvac.html
-- Exotic Auto Detailing: https://sheetboltanalytics.netlify.app/demos/apex-detailing.html
+- Dental: https://raw.githack.com/KaranKumar004/outreach/main/public/demos/vance-dental.html
+- HVAC & Emergency: https://raw.githack.com/KaranKumar004/outreach/main/public/demos/mile-high-hvac.html
+- Exotic Auto Detailing: https://raw.githack.com/KaranKumar004/outreach/main/public/demos/apex-detailing.html
+- Showcase Hub: https://raw.githack.com/KaranKumar004/outreach/main/public/demos/index.html
 Booking Link: https://wa.me/917204059791?text=Hi%20Karan%2C%20I%20would%20like%20to%20schedule%20a%20website%20consultation
 
 Analyze the prospect's email and output JSON with these exact keys:
