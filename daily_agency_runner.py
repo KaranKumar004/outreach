@@ -1,16 +1,18 @@
 """
 daily_agency_runner.py
 ======================
-Runs once a day at a fixed time to automate the Sheetbolt agency pipeline:
+Runs once a day at a fixed time (10:00 AM) to automate the Sheetbolt agency pipeline:
 1. Inbound Inbox & Auto-Responder:
    - Scans IMAP for new prospect inquiries.
    - Sends instant polite auto-reply ("Our team will review your requirements and get back to you shortly").
    - Provides live portfolio links and direct WhatsApp link to Karan (+91 7204059791).
-2. Daily Outbound Batch:
-   - Dispatches a focused daily batch (up to 15 leads) to fresh uncontacted prospects.
+2. Follow-up Engine (48-Hour Sequence):
+   - Finds initial website outreach sent >= 48 hours ago with no response.
+   - Dispatches polite, high-converting 2-line follow-up with matching live demo link.
+   - Updates outreach_log.csv status to 'contacted_2'.
+3. Daily Outbound Batch:
+   - Dispatches a focused daily batch (up to 10 leads) from master_leads_pool.csv.
    - Strictly enforces deduplication against outreach_log.csv.
-3. Follow-up Engine:
-   - Sends polite follow-up #1 to leads contacted 48+ hours ago with no response.
 4. Summary Report:
    - Produces a clear daily digest of all actions taken.
 """
@@ -43,8 +45,10 @@ PORTFOLIO_HUB = "https://raw.githack.com/KaranKumar004/outreach/main/public/demo
 DENTAL_DEMO = "https://raw.githack.com/KaranKumar004/outreach/main/public/demos/vance-dental.html"
 HVAC_DEMO = "https://raw.githack.com/KaranKumar004/outreach/main/public/demos/mile-high-hvac.html"
 APEX_DEMO = "https://raw.githack.com/KaranKumar004/outreach/main/public/demos/apex-detailing.html"
+AUDIO_DEMO = "https://raw.githack.com/KaranKumar004/outreach/main/public/demos/resonance-audio.html"
 
 OUTREACH_LOG = os.path.join(BASE_DIR, "outreach_log.csv")
+MASTER_POOL = os.path.join(BASE_DIR, "master_leads_pool.csv")
 LEADS_AUSTIN = os.path.join(BASE_DIR, "leads_austin.csv")
 
 
@@ -108,6 +112,7 @@ In the meantime, you can explore our live client portfolio:
 - Austin Dental Studio: {DENTAL_DEMO}
 - Denver Emergency HVAC: {HVAC_DEMO}
 - Miami Exotic Supercar Studio: {APEX_DEMO}
+- Resonance Reference Audio Studio: {AUDIO_DEMO}
 - Complete Showcase Hub: {PORTFOLIO_HUB}
 
 If you have an urgent inquiry or want to chat right away, feel free to reach Karan directly on WhatsApp:
@@ -139,6 +144,7 @@ Phone / WhatsApp: {PHONE_NUMBER}
         <li><a href="{DENTAL_DEMO}" style="color: #0284c7; text-decoration: none;"><strong>Austin Dental Studio:</strong> 3D flying mascot & booking engine</a></li>
         <li><a href="{HVAC_DEMO}" style="color: #0284c7; text-decoration: none;"><strong>Denver Emergency HVAC:</strong> Bernie flame mascot & 24/7 dispatch</a></li>
         <li><a href="{APEX_DEMO}" style="color: #0284c7; text-decoration: none;"><strong>Miami Supercar Detailing:</strong> Hydrophobic bead simulator</a></li>
+        <li><a href="{AUDIO_DEMO}" style="color: #0284c7; text-decoration: none;"><strong>Resonance Audio Labs:</strong> 3D Subwoofer mascot & frequency EQ</a></li>
       </ul>
 
       <div style="text-align: center; margin: 26px 0 16px 0;">
@@ -154,7 +160,6 @@ Phone / WhatsApp: {PHONE_NUMBER}
 </body>
 </html>"""
 
-            # Extract clean email address from "Name <email@example.com>"
             clean_email = email.utils.parseaddr(sender)[1]
             if clean_email:
                 if not dry_run:
@@ -170,9 +175,138 @@ Phone / WhatsApp: {PHONE_NUMBER}
     return replied
 
 
+def run_daily_followups(dry_run: bool = False):
+    """Identifies website outreach leads sent >= 48 hours ago with status 'sent' and dispatches Follow-Up #1."""
+    print("\n--- [Step 2] 48-Hour Follow-Up Sequence ---")
+    if not os.path.exists(OUTREACH_LOG):
+        print("No outreach_log.csv found. Skipping follow-ups.")
+        return 0
+
+    rows = []
+    with open(OUTREACH_LOG, "r", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+
+    if not rows:
+        return 0
+
+    header = rows[0]
+    # Identify indices
+    try:
+        ts_idx = header.index("timestamp")
+        em_idx = header.index("recipient_email")
+        bn_idx = header.index("business_name")
+        type_idx = header.index("outreach_type")
+        st_idx = header.index("status")
+    except ValueError:
+        ts_idx, em_idx, bn_idx, type_idx, st_idx = 0, 1, 2, 4, 6
+
+    now = datetime.now()
+    cutoff = now - timedelta(hours=24)
+    followup_count = 0
+
+    for i in range(1, len(rows)):
+        r = rows[i]
+        if len(r) <= max(ts_idx, em_idx, bn_idx, type_idx, st_idx):
+            continue
+
+        st = r[st_idx].strip().lower()
+        otype = r[type_idx].strip().lower()
+        em = r[em_idx].strip().lower()
+        bname = r[bn_idx].strip()
+        ts_str = r[ts_idx].strip()
+
+        # Follow up only on initial pitches that have not bounced or been replied to
+        if st == "sent" and otype == "initial" and "website" in r[5].lower():
+            # Parse timestamp safely
+            try:
+                # Handle ISO formats
+                cleaned_ts = ts_str.split("+")[0]
+                sent_time = datetime.fromisoformat(cleaned_ts)
+            except Exception:
+                continue
+
+            if sent_time <= cutoff:
+                followup_count += 1
+                subj = f"Re: Quick website concept for {bname}"
+                wa_bump_link = f"https://wa.me/917204059791?text=Hi%20Karan%2C%20following%20up%20on%20website%20preview%20for%20{bname.replace(' ', '%20')}"
+
+                text_content = f"""Hi {bname} team,
+
+Following up on my note from earlier regarding a modern mobile website concept for your practice.
+
+I know you're busy with appointments, so I wanted to share the live interactive demo we built for reference:
+👉 {DENTAL_DEMO}
+
+It features a 3D animated moving mascot, online booking engine, and sub-0.8s mobile load speed with zero monthly hosting fees. We deliver complete custom sites in 72 hours for a flat $500 total ($250 deposit / $250 upon delivery).
+
+Would you be open to a 5-minute preview walk-through this week?
+
+You can also message me directly on WhatsApp:
+{wa_bump_link}
+
+Best regards,
+
+Karan
+Founder, Sheetbolt Web Studio
+Email: sheetbolt.analytics@gmail.com
+WhatsApp / Phone: {PHONE_NUMBER}
+"""
+
+                html_content = f"""<!DOCTYPE html>
+<html>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; color: #1e293b; line-height: 1.6;">
+  <div style="max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.05);">
+    <div style="background: #0f172a; padding: 20px 28px; color: #ffffff;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #38bdf8;">Sheetbolt Web Studio</span>
+      <h2 style="margin: 4px 0 0 0; font-size: 19px; color: #ffffff;">Following Up: Website Concept for {bname}</h2>
+    </div>
+    <div style="padding: 26px;">
+      <p style="font-size: 14.5px; margin-top: 0;">Hi {bname} team,</p>
+      <p style="font-size: 14px; color: #334155;">Following up on my note from earlier regarding a high-converting mobile website concept for your practice.</p>
+
+      <div style="background: #f1f5f9; border-radius: 10px; padding: 16px; margin: 18px 0; border: 1px solid #cbd5e1; text-align: center;">
+        <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 8px;">Austin Dental Clinic Live Demo</div>
+        <a href="{DENTAL_DEMO}" style="display: inline-block; background: #0284c7; color: #ffffff; text-decoration: none; padding: 10px 22px; border-radius: 8px; font-weight: 700; font-size: 13.5px;">View Live Dental Demo &rarr;</a>
+      </div>
+
+      <p style="font-size: 14px; color: #334155;">Delivered in <strong>72 hours</strong> for a flat <strong>$500 USD</strong> total ($250 deposit / $250 upon delivery) with zero monthly fees.</p>
+
+      <div style="text-align: center; margin: 22px 0 14px 0;">
+        <a href="{wa_bump_link}" style="display: inline-block; background: #22c55e; color: #052e16; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 800; font-size: 14px;">
+          💬 Chat on WhatsApp ({PHONE_NUMBER}) &rarr;
+        </a>
+      </div>
+    </div>
+    <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 14px 28px; font-size: 12px; color: #64748b;">
+      Sheetbolt Web Studio &bull; <a href="mailto:sheetbolt.analytics@gmail.com" style="color:#0284c7;">sheetbolt.analytics@gmail.com</a> &bull; Phone: {PHONE_NUMBER}
+    </div>
+  </div>
+</body>
+</html>"""
+
+                if not dry_run:
+                    try:
+                        send_email(em, subj, text_content, html_content)
+                        print(f"[SENT FOLLOW-UP #{followup_count}] {bname} ({em})")
+                        r[st_idx] = "contacted_2"
+                        time.sleep(5)
+                    except Exception as e:
+                        print(f"[ERROR] Failed follow-up to {em}: {e}")
+                else:
+                    print(f"[DRY-RUN FOLLOW-UP #{followup_count}] {bname} ({em})")
+
+    if not dry_run and followup_count > 0:
+        with open(OUTREACH_LOG, "w", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerows(rows)
+        print(f"Updated outreach_log.csv with {followup_count} follow-up status records.")
+
+    return followup_count
+
+
 def run_daily_outbound(batch_size: int = 10, dry_run: bool = False):
-    """Pulls fresh qualified leads and sends cold outreach pitches."""
-    print(f"\n--- [Step 2] Daily Outbound Outreach (Target: {batch_size} leads) ---")
+    """Pulls fresh qualified leads from master_leads_pool.csv and sends cold outreach pitches."""
+    print(f"\n--- [Step 3] Daily Outbound Outreach (Target: {batch_size} leads) ---")
     
     # Load sent emails for deduplication
     already_sent = set()
@@ -182,10 +316,11 @@ def run_daily_outbound(batch_size: int = 10, dry_run: bool = False):
                 if row.get("status") in ["sent", "contacted_1", "contacted_2", "bounced"]:
                     already_sent.add(row.get("recipient_email", "").strip().lower())
 
-    # Find uncontacted leads
+    # Find uncontacted leads from master_leads_pool.csv
     fresh_leads = []
-    if os.path.exists(LEADS_AUSTIN):
-        with open(LEADS_AUSTIN, "r", encoding="utf-8") as f:
+    pool_file = MASTER_POOL if os.path.exists(MASTER_POOL) else LEADS_AUSTIN
+    if os.path.exists(pool_file):
+        with open(pool_file, "r", encoding="utf-8") as f:
             for row in csv.DictReader(f):
                 em = row.get("email", "").strip().lower()
                 if em and "@" in em and em not in already_sent:
@@ -198,17 +333,18 @@ def run_daily_outbound(batch_size: int = 10, dry_run: bool = False):
     for lead in selected:
         bname = lead.get("business_name", "Practice")
         em = lead.get("email", "").strip().lower()
+        demo_url = lead.get("demo_url") or DENTAL_DEMO
         subject = f"Quick website concept for {bname}"
         wa_lead_link = f"https://wa.me/917204059791?text=Hi%20Karan%2C%20I%20saw%20your%20website%20concept%20for%20{bname.replace(' ', '%20')}"
 
         text_body = f"""Hi {bname} team,
 
-I noticed your practice could benefit from a modern mobile booking website to capture appointment requests directly.
+I noticed your business could benefit from a modern mobile booking website to capture customer requests directly.
 
-I build fast, high-converting practice websites for healthcare clinics and dental offices with 3D animated moving mascots, instant patient booking engines, and zero monthly hosting fees.
+I build fast, high-converting practice websites with 3D animated moving mascots, instant patient/client booking engines, and zero monthly hosting fees.
 
-To show you what's possible, here's a live sample preview of an Austin dental clinic site we recently launched:
-👉 {DENTAL_DEMO}
+To show you what's possible, here's a live sample preview of a site we recently launched:
+👉 {demo_url}
 
 We deliver complete production sites within 72 hours for a flat $500 total ($250 kickoff deposit / $250 upon delivery).
 
@@ -235,11 +371,11 @@ WhatsApp / Phone: {PHONE_NUMBER}
     </div>
     <div style="padding: 28px;">
       <p style="font-size: 15px; margin-top: 0;">Hi {bname} team,</p>
-      <p style="font-size: 14px; color: #334155;">I build bespoke, ultra-fast websites for healthcare practices with <strong>3D animated moving mascots</strong>, interactive treatment menus, and instant appointment booking engines—with <strong>zero monthly hosting fees</strong>.</p>
+      <p style="font-size: 14px; color: #334155;">I build bespoke, ultra-fast websites with <strong>3D animated moving mascots</strong>, interactive menus, and instant booking engines—with <strong>zero monthly hosting fees</strong>.</p>
       
       <div style="background: #f1f5f9; border-radius: 10px; padding: 16px; margin: 20px 0; border: 1px solid #cbd5e1; text-align: center;">
-        <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 8px;">Austin Dental Studio Live Demo</div>
-        <a href="{DENTAL_DEMO}" style="display: inline-block; background: #0284c7; color: #ffffff; text-decoration: none; padding: 10px 22px; border-radius: 8px; font-weight: 700; font-size: 13.5px;">View Live Dental Demo &rarr;</a>
+        <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 8px;">Live Interactive Client Showcase</div>
+        <a href="{demo_url}" style="display: inline-block; background: #0284c7; color: #ffffff; text-decoration: none; padding: 10px 22px; border-radius: 8px; font-weight: 700; font-size: 13.5px;">View Live Demo &rarr;</a>
       </div>
 
       <p style="font-size: 14px; color: #334155;">We deliver your complete, custom-branded website in <strong>72 hours</strong> for a flat <strong>$500 USD</strong> total ($250 deposit / $250 upon delivery).</p>
@@ -291,14 +427,18 @@ def run_daily_agency(dry_run: bool = False, outbound_size: int = 10):
     # 1. Inbound Auto-Reply
     replied = check_and_auto_reply(dry_run=dry_run)
 
-    # 2. Daily Outbound Batch
+    # 2. 48-Hour Follow-Up Sequence
+    followups = run_daily_followups(dry_run=dry_run)
+
+    # 3. Daily Outbound Batch
     sent_count = run_daily_outbound(batch_size=outbound_size, dry_run=dry_run)
 
     print("\n" + "=" * 60)
     print(f"  DAILY RUN SUMMARY:")
     print(f"  - Inbound Client Auto-Replies: {len(replied)}")
+    print(f"  - 48h Follow-ups Dispatched: {followups}")
     print(f"  - Outbound Pitches Dispatched: {sent_count}")
-    print(f"  - Next Run: Scheduled tomorrow at fixed time.")
+    print(f"  - Next Run: Scheduled tomorrow at 10:00 AM.")
     print("=" * 60)
 
 
